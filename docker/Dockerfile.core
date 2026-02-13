@@ -43,7 +43,7 @@ RUN cargo build --release 2>/dev/null || true
 
 # Copy real source and rebuild
 COPY src/ src/
-RUN cargo build --release
+RUN touch src/main.rs src/lib.rs src/bin/*.rs && cargo build --release
 
 # ── Runtime ──────────────────────────────────────────────────────────────────
 FROM debian:trixie-slim
