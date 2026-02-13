@@ -163,8 +163,8 @@ jobs:
       - name: Update image tags in manifests
         run: |
           cd k8s
-          # Pin to current commit SHA for reproducible deploys
-          sed -i "s|:latest|:${{ github.sha }}|g" *.yaml
+          # Pin only our ghcr.io images to current commit SHA (leave iggyrs/iggy:latest alone)
+          sed -i "s|ghcr.io/inventhq/\([^:]*\):latest|ghcr.io/inventhq/\1:${{ github.sha }}|g" *.yaml
 
       - name: Apply manifests
         run: |

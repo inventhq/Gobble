@@ -46,7 +46,7 @@ COPY src/ src/
 RUN cargo build --release
 
 # ── Runtime ──────────────────────────────────────────────────────────────────
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 ARG BINARY=tracker-core
 
