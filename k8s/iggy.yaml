@@ -55,13 +55,15 @@ spec:
           volumeMounts:
             - name: iggy-data
               mountPath: /data
+            - name: iggy-config
+              mountPath: /iggy/configs
           resources:
             requests:
               cpu: 250m
               memory: 512Mi
             limits:
               cpu: "1"
-              memory: 1Gi
+              memory: 2Gi
           livenessProbe:
             tcpSocket:
               port: 8090
@@ -72,6 +74,10 @@ spec:
               port: 8090
             initialDelaySeconds: 5
             periodSeconds: 10
+      volumes:
+        - name: iggy-config
+          configMap:
+            name: iggy-config
   volumeClaimTemplates:
     - metadata:
         name: iggy-data

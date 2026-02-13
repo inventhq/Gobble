@@ -7,6 +7,7 @@ resources:
   - namespace.yaml
   - configmap.yaml
   - secrets.yaml
+  - iggy-config.yaml
   - iggy.yaml
   - tracker-core.yaml
   - sse-gateway.yaml
