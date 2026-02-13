@@ -18,6 +18,8 @@ spec:
         app: sse-gateway
         tier: hot
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: sse-gateway
           image: ghcr.io/inventhq/sse-gateway:latest

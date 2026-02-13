@@ -19,6 +19,8 @@ spec:
         app: polars-query
         tier: cold
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: polars-query
           image: ghcr.io/inventhq/polars-query:latest

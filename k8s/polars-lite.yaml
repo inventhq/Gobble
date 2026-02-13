@@ -19,6 +19,8 @@ spec:
         app: polars-lite
         tier: warm
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: polars-lite
           image: ghcr.io/inventhq/polars-lite:latest

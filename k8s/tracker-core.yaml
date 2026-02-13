@@ -19,6 +19,8 @@ spec:
         app: tracker-core
         tier: hot
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: tracker-core
           image: ghcr.io/inventhq/tracker-core:latest

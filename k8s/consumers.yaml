@@ -21,6 +21,8 @@ spec:
         app: stats-consumer
         tier: hot
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: stats-consumer
           image: ghcr.io/inventhq/stats-consumer:latest
@@ -57,6 +59,8 @@ spec:
         app: webhook-consumer
         tier: hot
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: webhook-consumer
           image: ghcr.io/inventhq/webhook-consumer:latest
@@ -93,6 +97,8 @@ spec:
         app: risingwave-consumer
         tier: hot
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: risingwave-consumer
           image: ghcr.io/inventhq/risingwave-consumer:latest
@@ -129,6 +135,8 @@ spec:
         app: r2-archiver
         tier: cold
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: r2-archiver
           image: ghcr.io/inventhq/r2-archiver:latest
@@ -165,6 +173,8 @@ spec:
         app: event-filter
         tier: hot
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: event-filter
           image: ghcr.io/inventhq/event-filter:latest

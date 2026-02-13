@@ -18,6 +18,8 @@ spec:
         app: ai-query
         tier: ai
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: ai-query
           image: ghcr.io/inventhq/ai-query:latest
