@@ -4,7 +4,7 @@
 #   docker build -f docker/Dockerfile.ai-query -t ai-query .
 
 # ── Builder ──────────────────────────────────────────────────────────────────
-FROM rust:1.88-bookworm AS builder
+FROM rust:latest AS builder
 
 WORKDIR /build
 
