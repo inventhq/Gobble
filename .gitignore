@@ -1,0 +1,9 @@
+**/target/
+node_modules
+dist
+*.tsbuildinfo
+.env
+.env.local
+.env.*
+.DS_Store
+*.wasm

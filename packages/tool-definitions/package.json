@@ -1,0 +1,7 @@
+{
+  "name": "@tracker/tool-definitions",
+  "version": "1.0.0",
+  "description": "Shared tool definitions for MCP and Vivgrid — zero runtime, static TypeScript only",
+  "type": "module",
+  "main": "src/index.ts"
+}

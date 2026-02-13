@@ -1,0 +1,22 @@
+{
+  "name": "@tracker/mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for the Tracker Platform API — exposes tenant management, event queries, stats, and webhook operations as AI-callable tools",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@tracker/tool-definitions": "file:../tool-definitions",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.2",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

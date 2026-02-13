@@ -1,0 +1,82 @@
+# Iggy message broker — StatefulSet with persistent storage.
+# Uses the official Apache Iggy Docker image.
+apiVersion: v1
+kind: Service
+metadata:
+  name: iggy
+  namespace: tracker
+spec:
+  clusterIP: None
+  selector:
+    app: iggy
+  ports:
+    - name: tcp
+      port: 8090
+      targetPort: 8090
+    - name: http
+      port: 3000
+      targetPort: 3000
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: iggy
+  namespace: tracker
+spec:
+  serviceName: iggy
+  replicas: 1
+  selector:
+    matchLabels:
+      app: iggy
+  template:
+    metadata:
+      labels:
+        app: iggy
+    spec:
+      containers:
+        - name: iggy
+          image: iggyrs/iggy:latest
+          ports:
+            - containerPort: 8090
+              name: tcp
+            - containerPort: 3000
+              name: http
+          env:
+            - name: IGGY_ROOT_USERNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: tracker-config
+                  key: IGGY_ROOT_USERNAME
+            - name: IGGY_ROOT_PASSWORD
+              valueFrom:
+                configMapKeyRef:
+                  name: tracker-config
+                  key: IGGY_ROOT_PASSWORD
+          volumeMounts:
+            - name: iggy-data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          livenessProbe:
+            tcpSocket:
+              port: 8090
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            tcpSocket:
+              port: 8090
+            initialDelaySeconds: 5
+            periodSeconds: 10
+  volumeClaimTemplates:
+    - metadata:
+        name: iggy-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 20Gi

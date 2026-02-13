@@ -1,0 +1,43 @@
+# Multi-stage build for ai-query (AI intelligence layer: Text-to-SQL + LanceDB vector search).
+#
+# Usage:
+#   docker build -f docker/Dockerfile.ai-query -t ai-query .
+
+# ── Builder ──────────────────────────────────────────────────────────────────
+FROM rust:1.83-bookworm AS builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libssl-dev protobuf-compiler cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy manifests for dep caching
+COPY packages/ai-query/Cargo.toml packages/ai-query/Cargo.lock packages/ai-query/
+
+# Dummy source for dep caching
+RUN mkdir -p packages/ai-query/src && \
+    echo "fn main() {}" > packages/ai-query/src/main.rs
+
+WORKDIR /build/packages/ai-query
+RUN cargo build --release 2>/dev/null || true
+
+# Copy real source and rebuild
+COPY packages/ai-query/src/ src/
+RUN touch src/main.rs && cargo build --release
+
+# ── Runtime ──────────────────────────────────────────────────────────────────
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /build/packages/ai-query/target/release/ai-query /usr/local/bin/app
+
+EXPOSE 3060
+
+ENV RUST_LOG=info
+ENV PORT=3060
+
+ENTRYPOINT ["/usr/local/bin/app"]

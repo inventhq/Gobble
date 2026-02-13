@@ -1,0 +1,11 @@
+{
+  "name": "@tracker/vivgrid-tools",
+  "version": "1.0.0",
+  "description": "Vivgrid AI chat integration — LLM function calling tools for the Tracker Platform API",
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@tracker/tool-definitions": "file:../tool-definitions",
+    "hono": "^4.11.9"
+  }
+}

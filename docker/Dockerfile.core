@@ -1,0 +1,63 @@
+# Multi-stage build for tracker-core binaries.
+# Builds all 7 binaries from the root Cargo.toml in one builder stage,
+# then copies only the selected binary into a minimal runtime image.
+#
+# Usage:
+#   docker build -f docker/Dockerfile.core --build-arg BINARY=tracker-core -t tracker-core .
+#   docker build -f docker/Dockerfile.core --build-arg BINARY=stats-consumer -t stats-consumer .
+#   docker build -f docker/Dockerfile.core --build-arg BINARY=webhook-consumer -t webhook-consumer .
+#   docker build -f docker/Dockerfile.core --build-arg BINARY=sse-gateway -t sse-gateway .
+#   docker build -f docker/Dockerfile.core --build-arg BINARY=risingwave-consumer -t risingwave-consumer .
+#   docker build -f docker/Dockerfile.core --build-arg BINARY=r2-archiver -t r2-archiver .
+#   docker build -f docker/Dockerfile.core --build-arg BINARY=event-filter -t event-filter .
+
+ARG BINARY=tracker-core
+
+# ── Builder ──────────────────────────────────────────────────────────────────
+FROM rust:1.83-bookworm AS builder
+
+WORKDIR /build
+
+# Install system deps needed by native-tls (openssl) and protobuf
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libssl-dev protobuf-compiler cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy manifests first for dependency caching
+COPY Cargo.toml Cargo.lock ./
+COPY packages/aggregate-schema/ packages/aggregate-schema/
+
+# Create dummy src files so cargo can resolve deps and cache them
+RUN mkdir -p src/bin && \
+    echo "fn main() {}" > src/main.rs && \
+    echo "pub fn dummy() {}" > src/lib.rs && \
+    echo "fn main() {}" > src/bin/stats_consumer.rs && \
+    echo "fn main() {}" > src/bin/webhook_consumer.rs && \
+    echo "fn main() {}" > src/bin/sse_gateway.rs && \
+    echo "fn main() {}" > src/bin/risingwave_consumer.rs && \
+    echo "fn main() {}" > src/bin/r2_archiver.rs && \
+    echo "fn main() {}" > src/bin/event_filter.rs
+
+# Build deps only (cached unless Cargo.toml/Cargo.lock change)
+RUN cargo build --release 2>/dev/null || true
+
+# Copy real source and rebuild
+COPY src/ src/
+RUN cargo build --release
+
+# ── Runtime ──────────────────────────────────────────────────────────────────
+FROM debian:bookworm-slim
+
+ARG BINARY=tracker-core
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /build/target/release/${BINARY} /usr/local/bin/app
+
+EXPOSE 3030
+
+ENV RUST_LOG=info
+
+ENTRYPOINT ["/usr/local/bin/app"]

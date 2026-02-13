@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: tracker
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secrets.yaml
+  - iggy.yaml
+  - tracker-core.yaml
+  - sse-gateway.yaml
+  - consumers.yaml
+  - polars-query.yaml
+  - polars-lite.yaml
+  - ai-query.yaml

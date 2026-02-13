@@ -1,0 +1,44 @@
+# Multi-stage build for polars-lite (warm tier Polars + R2 aggregates service).
+#
+# Usage:
+#   docker build -f docker/Dockerfile.polars-lite -t polars-lite .
+
+# ── Builder ──────────────────────────────────────────────────────────────────
+FROM rust:1.83-bookworm AS builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libssl-dev protobuf-compiler cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy manifests for dep caching (polars-lite depends on aggregate-schema)
+COPY packages/aggregate-schema/ packages/aggregate-schema/
+COPY packages/polars-lite/Cargo.toml packages/polars-lite/Cargo.lock packages/polars-lite/
+
+# Dummy source for dep caching
+RUN mkdir -p packages/polars-lite/src && \
+    echo "fn main() {}" > packages/polars-lite/src/main.rs
+
+WORKDIR /build/packages/polars-lite
+RUN cargo build --release 2>/dev/null || true
+
+# Copy real source and rebuild
+COPY packages/polars-lite/src/ src/
+RUN touch src/main.rs && cargo build --release
+
+# ── Runtime ──────────────────────────────────────────────────────────────────
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /build/packages/polars-lite/target/release/polars-lite /usr/local/bin/app
+
+EXPOSE 3041
+
+ENV RUST_LOG=info
+ENV PORT=3041
+
+ENTRYPOINT ["/usr/local/bin/app"]

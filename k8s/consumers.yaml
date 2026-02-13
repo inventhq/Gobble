@@ -1,0 +1,182 @@
+# Consumer deployments — all read from Iggy events-clean topic.
+# Each consumer type runs as a separate Deployment for independent scaling.
+
+# ── stats-consumer ───────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stats-consumer
+  namespace: tracker
+  labels:
+    app: stats-consumer
+    tier: hot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stats-consumer
+  template:
+    metadata:
+      labels:
+        app: stats-consumer
+        tier: hot
+    spec:
+      containers:
+        - name: stats-consumer
+          image: ghcr.io/inventhq/stats-consumer:latest
+          envFrom:
+            - configMapRef:
+                name: tracker-config
+            - secretRef:
+                name: tracker-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+# ── webhook-consumer ─────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webhook-consumer
+  namespace: tracker
+  labels:
+    app: webhook-consumer
+    tier: hot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webhook-consumer
+  template:
+    metadata:
+      labels:
+        app: webhook-consumer
+        tier: hot
+    spec:
+      containers:
+        - name: webhook-consumer
+          image: ghcr.io/inventhq/webhook-consumer:latest
+          envFrom:
+            - configMapRef:
+                name: tracker-config
+            - secretRef:
+                name: tracker-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+# ── risingwave-consumer ──────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: risingwave-consumer
+  namespace: tracker
+  labels:
+    app: risingwave-consumer
+    tier: hot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: risingwave-consumer
+  template:
+    metadata:
+      labels:
+        app: risingwave-consumer
+        tier: hot
+    spec:
+      containers:
+        - name: risingwave-consumer
+          image: ghcr.io/inventhq/risingwave-consumer:latest
+          envFrom:
+            - configMapRef:
+                name: tracker-config
+            - secretRef:
+                name: tracker-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+# ── r2-archiver ──────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: r2-archiver
+  namespace: tracker
+  labels:
+    app: r2-archiver
+    tier: cold
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: r2-archiver
+  template:
+    metadata:
+      labels:
+        app: r2-archiver
+        tier: cold
+    spec:
+      containers:
+        - name: r2-archiver
+          image: ghcr.io/inventhq/r2-archiver:latest
+          envFrom:
+            - configMapRef:
+                name: tracker-config
+            - secretRef:
+                name: tracker-secrets
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+---
+# ── event-filter ─────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: event-filter
+  namespace: tracker
+  labels:
+    app: event-filter
+    tier: hot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: event-filter
+  template:
+    metadata:
+      labels:
+        app: event-filter
+        tier: hot
+    spec:
+      containers:
+        - name: event-filter
+          image: ghcr.io/inventhq/event-filter:latest
+          envFrom:
+            - configMapRef:
+                name: tracker-config
+            - secretRef:
+                name: tracker-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

@@ -1,0 +1,66 @@
+# SSE gateway — streams events from Iggy to browser clients via Server-Sent Events.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sse-gateway
+  namespace: tracker
+  labels:
+    app: sse-gateway
+    tier: hot
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sse-gateway
+  template:
+    metadata:
+      labels:
+        app: sse-gateway
+        tier: hot
+    spec:
+      containers:
+        - name: sse-gateway
+          image: ghcr.io/inventhq/sse-gateway:latest
+          ports:
+            - containerPort: 3031
+          envFrom:
+            - configMapRef:
+                name: tracker-config
+            - secretRef:
+                name: tracker-secrets
+          env:
+            - name: SSE_PORT
+              value: "3031"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3031
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3031
+            initialDelaySeconds: 3
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sse-gateway
+  namespace: tracker
+spec:
+  type: LoadBalancer
+  selector:
+    app: sse-gateway
+  ports:
+    - port: 80
+      targetPort: 3031
+      protocol: TCP

@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tracker-config
+  namespace: tracker
+data:
+  # Tracker-core
+  URL_MODE: "signed"
+  HOST: "0.0.0.0"
+  IGGY_URL: "iggy.tracker.svc.cluster.local:8090"
+  IGGY_HTTP_URL: "http://iggy.tracker.svc.cluster.local:3000"
+  IGGY_STREAM: "tracker"
+  IGGY_TOPIC: "events"
+  IGGY_TOPIC_CLEAN: "events-clean"
+  IGGY_PARTITIONS: "24"
+  MAX_BATCH_SIZE: "10000"
+  RUST_LOG: "info"
+
+  # Service URLs (internal K8s DNS)
+  PLATFORM_API_URL: "https://platform-api.your-domain.com"
+  PLUGIN_RUNTIME_URL: "http://plugin-runtime.tracker.svc.cluster.local:3050"
+
+  # R2
+  R2_BUCKET: "tracker-events"
+
+  # LanceDB
+  LANCEDB_URI: "db://ai-query-8kc6p2"
+  LANCEDB_REGION: "us-east-1"
+
+  # Iggy credentials
+  IGGY_ROOT_USERNAME: "iggy"
+  IGGY_ROOT_PASSWORD: "iggy"

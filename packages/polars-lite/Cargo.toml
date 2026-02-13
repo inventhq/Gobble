@@ -1,0 +1,24 @@
+[package]
+name = "polars-lite"
+version = "0.1.0"
+edition = "2021"
+
+# Warm tier query service: Polars 0.53 + object_store for reading hourly aggregate Parquet from R2.
+# No deltalake dependency — avoids chrono version conflict.
+# Separate binary with its own dependency tree (chrono 0.4.41).
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+polars = { version = "0.53", features = ["lazy", "parquet", "json", "strings"] }
+object_store = { version = "0.11", features = ["aws"] }
+aggregate-schema = { path = "../aggregate-schema" }
+tower-http = { version = "0.6", features = ["cors"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dotenvy = "0.15"
+chrono = "0.4"
+bytes = "1"
+futures-util = "0.3"

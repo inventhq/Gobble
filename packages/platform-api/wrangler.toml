@@ -1,0 +1,14 @@
+name = "tracker-platform-api"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "development"
+
+# Turso database connection — set these as secrets in production:
+#   wrangler secret put TURSO_URL
+#   wrangler secret put TURSO_AUTH_TOKEN
+#   wrangler secret put PERMIT_API_KEY
+#
+# For local dev, set in .dev.vars file

@@ -1,0 +1,14 @@
+**/target/
+**/node_modules/
+.git/
+.env
+.env.*
+.DS_Store
+
+# Non-Rust packages (not needed for Docker builds)
+packages/app/
+packages/platform-api/
+packages/mcp-server/
+packages/sdk-typescript/
+packages/tool-definitions/
+packages/vivgrid-tools/

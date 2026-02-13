@@ -1,0 +1,67 @@
+# tracker-core — main HTTP server for event tracking.
+# Handles /t /p /i /ingest /batch endpoints.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tracker-core
+  namespace: tracker
+  labels:
+    app: tracker-core
+    tier: hot
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tracker-core
+  template:
+    metadata:
+      labels:
+        app: tracker-core
+        tier: hot
+    spec:
+      containers:
+        - name: tracker-core
+          image: ghcr.io/inventhq/tracker-core:latest
+          ports:
+            - containerPort: 3030
+          envFrom:
+            - configMapRef:
+                name: tracker-config
+            - secretRef:
+                name: tracker-secrets
+          env:
+            - name: PORT
+              value: "3030"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3030
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3030
+            initialDelaySeconds: 3
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tracker-core
+  namespace: tracker
+spec:
+  type: LoadBalancer
+  selector:
+    app: tracker-core
+  ports:
+    - port: 80
+      targetPort: 3030
+      protocol: TCP

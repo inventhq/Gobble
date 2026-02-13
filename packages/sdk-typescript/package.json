@@ -1,0 +1,30 @@
+{
+  "name": "@tracker/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for tracker-core — generate signed/encrypted tracking URLs and batch-send events",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --import tsx --test src/**/*.test.ts",
+    "lint": "tsc --noEmit"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": ["tracker", "tracking", "sdk", "clicks", "postbacks", "impressions"],
+  "license": "MIT",
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "@types/node": "^20.11.0"
+  }
+}

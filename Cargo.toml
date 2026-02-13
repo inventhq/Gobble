@@ -1,0 +1,67 @@
+[package]
+name = "tracker-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+iggy = "0.8.1-edge.1"
+uuid = { version = "1", features = ["v7"] }
+hmac = "0.12"
+sha2 = "0.10"
+aes-gcm = "0.10"
+base64 = "0.22"
+hex = "0.4"
+bytes = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dotenvy = "0.15"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+futures-util = "0.3"
+tokio-stream = "0.1"
+async-stream = "0.3"
+tower-http = { version = "0.6", features = ["cors"] }
+tokio-postgres = "0.7"
+postgres-native-tls = "0.5"
+native-tls = "0.2"
+deadpool-postgres = { version = "0.14", features = ["rt_tokio_1"] }
+arrow = "57"
+parquet = { version = "57", features = ["async"] }
+aws-sdk-s3 = "1"
+aws-config = { version = "1", features = ["behavior-version-latest"] }
+deltalake = { version = "0.30", features = ["s3", "datafusion"] }
+object_store = { version = "0.12", features = ["aws"] }
+url = "2"
+chrono = "0.4"
+aggregate-schema = { path = "packages/aggregate-schema" }
+
+[[bin]]
+name = "tracker-core"
+path = "src/main.rs"
+
+[[bin]]
+name = "stats-consumer"
+path = "src/bin/stats_consumer.rs"
+
+[[bin]]
+name = "webhook-consumer"
+path = "src/bin/webhook_consumer.rs"
+
+[[bin]]
+name = "sse-gateway"
+path = "src/bin/sse_gateway.rs"
+
+[[bin]]
+name = "risingwave-consumer"
+path = "src/bin/risingwave_consumer.rs"
+
+[[bin]]
+name = "r2-archiver"
+path = "src/bin/r2_archiver.rs"
+
+[[bin]]
+name = "event-filter"
+path = "src/bin/event_filter.rs"
