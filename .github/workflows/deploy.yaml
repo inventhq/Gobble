@@ -133,6 +133,9 @@ jobs:
   # ── Deploy to Civo K3s ────────────────────────────────────────────────────
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     needs:
       - build-core
       - build-polars-query
@@ -148,6 +151,14 @@ jobs:
         run: |
           mkdir -p $HOME/.kube
           echo "${{ secrets.CIVO_KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+
+      - name: Create/update ghcr.io pull secret
+        run: |
+          kubectl -n tracker delete secret ghcr-pull-secret --ignore-not-found
+          kubectl -n tracker create secret docker-registry ghcr-pull-secret \
+            --docker-server=ghcr.io \
+            --docker-username=${{ github.actor }} \
+            --docker-password=${{ secrets.GITHUB_TOKEN }}
 
       - name: Update image tags in manifests
         run: |
