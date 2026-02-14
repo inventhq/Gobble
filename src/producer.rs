@@ -97,7 +97,7 @@ impl EventProducer {
         let client = IggyClientBuilder::new()
             .with_tcp()
             .with_server_address(resolved_addr.clone())
-            .with_auto_sign_in(AutoLogin::Enabled(iggy::prelude::Credentials::UsernamePassword(
+            .with_auto_sign_in(AutoLogin::Enabled(iggy_common::Credentials::UsernamePassword(
                 DEFAULT_ROOT_USERNAME.to_string(),
                 DEFAULT_ROOT_PASSWORD.to_string(),
             )))
@@ -344,7 +344,7 @@ impl EventProducer {
         let client = match IggyClientBuilder::new()
             .with_tcp()
             .with_server_address(resolved)
-            .with_auto_sign_in(AutoLogin::Enabled(iggy::prelude::Credentials::UsernamePassword(
+            .with_auto_sign_in(AutoLogin::Enabled(iggy_common::Credentials::UsernamePassword(
                 DEFAULT_ROOT_USERNAME.to_string(),
                 DEFAULT_ROOT_PASSWORD.to_string(),
             )))
