@@ -90,10 +90,17 @@ impl EventProducer {
         let resolved_addr = resolve_server_addr(server_addr).await;
         info!("Iggy server address: {} (resolved from {})", resolved_addr, server_addr);
 
-        // Build a TCP client pointed at the Iggy server
+        // Build a TCP client pointed at the Iggy server with auto-login enabled.
+        // The Iggy SDK's background producer creates its own internal TCP connections
+        // that don't inherit the parent client's auth — auto-login ensures all
+        // connections authenticate automatically.
         let client = IggyClientBuilder::new()
             .with_tcp()
             .with_server_address(resolved_addr.clone())
+            .with_auto_sign_in(AutoLogin::Enabled(Credentials::UsernamePassword(
+                DEFAULT_ROOT_USERNAME.to_string(),
+                DEFAULT_ROOT_PASSWORD.to_string(),
+            )))
             .build()?;
 
         // Attempt connection with a 5-second timeout to avoid blocking
@@ -105,13 +112,7 @@ impl EventProducer {
         .await
         {
             Ok(Ok(_)) => {
-                info!("Connected to Iggy at {}", server_addr);
-
-                // Authenticate with default root credentials
-                client
-                    .login_user(DEFAULT_ROOT_USERNAME, DEFAULT_ROOT_PASSWORD)
-                    .await?;
-                info!("Logged in to Iggy as root");
+                info!("Connected to Iggy at {} (auto-login enabled)", server_addr);
 
                 // Ensure the stream exists (idempotent)
                 match client.create_stream(stream_name).await {
@@ -343,6 +344,10 @@ impl EventProducer {
         let client = match IggyClientBuilder::new()
             .with_tcp()
             .with_server_address(resolved)
+            .with_auto_sign_in(AutoLogin::Enabled(Credentials::UsernamePassword(
+                DEFAULT_ROOT_USERNAME.to_string(),
+                DEFAULT_ROOT_PASSWORD.to_string(),
+            )))
             .build()
         {
             Ok(c) => c,
@@ -362,14 +367,6 @@ impl EventProducer {
                 warn!("Reconnect: connection timed out");
                 return false;
             }
-        }
-
-        if let Err(e) = client
-            .login_user(DEFAULT_ROOT_USERNAME, DEFAULT_ROOT_PASSWORD)
-            .await
-        {
-            warn!("Reconnect: login failed: {}", e);
-            return false;
         }
 
         // Ensure stream exists
