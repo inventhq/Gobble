@@ -574,14 +574,14 @@ async fn main() {
     let producer_client = IggyClientBuilder::new()
         .with_tcp()
         .with_server_address(resolved_iggy.clone())
+        .with_auto_sign_in(AutoLogin::Enabled(Credentials::UsernamePassword(
+            DEFAULT_ROOT_USERNAME.to_string(),
+            DEFAULT_ROOT_PASSWORD.to_string(),
+        )))
         .build()
         .expect("Failed to build Iggy producer client");
 
     producer_client.connect().await.expect("Failed to connect producer to Iggy");
-    producer_client
-        .login_user(DEFAULT_ROOT_USERNAME, DEFAULT_ROOT_PASSWORD)
-        .await
-        .expect("Failed to login producer to Iggy");
 
     // Ensure stream exists (idempotent)
     match producer_client.create_stream(&iggy_stream).await {
@@ -631,14 +631,14 @@ async fn main() {
         let client = IggyClientBuilder::new()
             .with_tcp()
             .with_server_address(resolved_iggy.clone())
+            .with_auto_sign_in(AutoLogin::Enabled(Credentials::UsernamePassword(
+                DEFAULT_ROOT_USERNAME.to_string(),
+                DEFAULT_ROOT_PASSWORD.to_string(),
+            )))
             .build()
             .expect("Failed to build Iggy consumer client");
 
         client.connect().await.expect("Failed to connect to Iggy");
-        client
-            .login_user(DEFAULT_ROOT_USERNAME, DEFAULT_ROOT_PASSWORD)
-            .await
-            .expect("Failed to login to Iggy");
 
         // HTTP client for polling (avoids Iggy server-side delivered-offset tracking bug)
         let http = reqwest::Client::new();
