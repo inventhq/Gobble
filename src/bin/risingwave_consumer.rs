@@ -385,7 +385,13 @@ async fn main() {
     let iggy_http_url = env::var("IGGY_HTTP_URL").unwrap_or_else(|_| "http://127.0.0.1:3000".into());
     let iggy_stream = env::var("IGGY_STREAM").unwrap_or_else(|_| "tracker".into());
     let iggy_topic = env::var("IGGY_TOPIC").unwrap_or_else(|_| "events".into());
-    let rw_url = env::var("RISINGWAVE_URL").expect("RISINGWAVE_URL is required");
+    let rw_url = match env::var("RISINGWAVE_URL") {
+        Ok(u) if !u.is_empty() && u != "CHANGE_ME" => u,
+        _ => {
+            warn!("RISINGWAVE_URL not configured — risingwave-consumer cannot run. Sleeping forever.");
+            loop { tokio::time::sleep(std::time::Duration::from_secs(3600)).await; }
+        }
+    };
 
     let config = ConsumerConfig::from_env();
 

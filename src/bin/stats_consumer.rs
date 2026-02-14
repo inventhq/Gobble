@@ -441,7 +441,13 @@ async fn main() {
     let iggy_http_url = env::var("IGGY_HTTP_URL").unwrap_or_else(|_| "http://127.0.0.1:3000".into());
     let iggy_stream = env::var("IGGY_STREAM").unwrap_or_else(|_| "tracker".into());
     let iggy_topic = env::var("IGGY_TOPIC").unwrap_or_else(|_| "events".into());
-    let turso_url = env::var("TURSO_URL").expect("TURSO_URL is required");
+    let turso_url = match env::var("TURSO_URL") {
+        Ok(u) if !u.is_empty() && u != "CHANGE_ME" => u,
+        _ => {
+            warn!("TURSO_URL not configured — stats-consumer cannot run. Sleeping forever.");
+            loop { tokio::time::sleep(std::time::Duration::from_secs(3600)).await; }
+        }
+    };
     let turso_token = env::var("TURSO_AUTH_TOKEN").unwrap_or_default();
 
     info!("Iggy: {}  Stream: {}  Topic: {}", iggy_url, iggy_stream, iggy_topic);

@@ -722,6 +722,15 @@ async fn main() {
 
     info!("Starting r2-archiver (Delta Lake mode)...");
 
+    // Check if R2 credentials are configured before loading config
+    match env::var("R2_ENDPOINT") {
+        Ok(u) if !u.is_empty() && u != "CHANGE_ME" => {}
+        _ => {
+            warn!("R2_ENDPOINT not configured — r2-archiver cannot run. Sleeping forever.");
+            loop { tokio::time::sleep(std::time::Duration::from_secs(3600)).await; }
+        }
+    }
+
     let config = ArchiverConfig::from_env();
 
     info!(
