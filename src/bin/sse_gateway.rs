@@ -124,7 +124,7 @@ async fn iggy_consumer_loop(
     let client = IggyClientBuilder::new()
         .with_tcp()
         .with_server_address(resolved_iggy.clone())
-        .with_auto_sign_in(AutoLogin::Enabled(Credentials::UsernamePassword(
+        .with_auto_sign_in(AutoLogin::Enabled(iggy::prelude::Credentials::UsernamePassword(
             DEFAULT_ROOT_USERNAME.to_string(),
             DEFAULT_ROOT_PASSWORD.to_string(),
         )))
