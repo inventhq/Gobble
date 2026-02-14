@@ -1,0 +1,13 @@
+FROM debian:trixie-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /iggy
+
+RUN curl -fsSL https://github.com/apache/iggy/releases/download/edge/iggy-x86_64-unknown-linux-musl-edge.tar.gz \
+    | tar xz && chmod +x /iggy/iggy-server
+
+EXPOSE 8090 3000
+
+CMD ["/iggy/iggy-server"]

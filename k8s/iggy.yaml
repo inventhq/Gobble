@@ -32,15 +32,19 @@ spec:
       labels:
         app: iggy
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: iggy
-          image: iggyrs/iggy:latest
+          image: ghcr.io/inventhq/iggy-edge:latest
           ports:
             - containerPort: 8090
               name: tcp
             - containerPort: 3000
               name: http
           env:
+            - name: IGGY_CONFIG_PATH
+              value: "/iggy/configs/server.toml"
             - name: IGGY_ROOT_USERNAME
               valueFrom:
                 configMapKeyRef:
