@@ -158,7 +158,7 @@ jobs:
           kubectl -n tracker create secret docker-registry ghcr-pull-secret \
             --docker-server=ghcr.io \
             --docker-username=${{ github.actor }} \
-            --docker-password=${{ secrets.GITHUB_TOKEN }}
+            --docker-password=${{ secrets.GHCR_PAT }}
 
       - name: Update image tags in manifests
         run: |

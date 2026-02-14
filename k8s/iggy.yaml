@@ -34,9 +34,22 @@ spec:
     spec:
       imagePullSecrets:
         - name: ghcr-pull-secret
+      initContainers:
+        - name: fetch-iggy
+          image: curlimages/curl:latest
+          command: ["sh", "-c"]
+          args:
+            - |
+              curl -fsSL https://github.com/apache/iggy/releases/download/edge/iggy-x86_64-unknown-linux-musl-edge.tar.gz \
+                | tar xz -C /iggy && chmod +x /iggy/iggy-server
+          volumeMounts:
+            - name: iggy-bin
+              mountPath: /iggy
       containers:
         - name: iggy
-          image: ghcr.io/inventhq/iggy-edge:latest
+          image: debian:trixie-slim
+          command: ["/iggy/iggy-server"]
+          workingDir: /iggy
           ports:
             - containerPort: 8090
               name: tcp
@@ -56,8 +69,10 @@ spec:
                   name: tracker-config
                   key: IGGY_ROOT_PASSWORD
           volumeMounts:
+            - name: iggy-bin
+              mountPath: /iggy
             - name: iggy-data
-              mountPath: /data
+              mountPath: /iggy/local_data
             - name: iggy-config
               mountPath: /iggy/configs
           resources:
@@ -78,6 +93,8 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
       volumes:
+        - name: iggy-bin
+          emptyDir: {}
         - name: iggy-config
           configMap:
             name: iggy-config
