@@ -86,10 +86,14 @@ impl EventProducer {
         topic_name: &str,
         partitions: u32,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        // Resolve DNS hostname to IP if needed (Iggy SDK only accepts IP addresses)
+        let resolved_addr = resolve_server_addr(server_addr).await;
+        info!("Iggy server address: {} (resolved from {})", resolved_addr, server_addr);
+
         // Build a TCP client pointed at the Iggy server
         let client = IggyClientBuilder::new()
             .with_tcp()
-            .with_server_address(server_addr.to_string())
+            .with_server_address(resolved_addr.clone())
             .build()?;
 
         // Attempt connection with a 5-second timeout to avoid blocking
@@ -335,9 +339,10 @@ impl EventProducer {
         let p = &self.conn_params;
         info!("Attempting NOOP → Iggy reconnection to {}...", p.server_addr);
 
+        let resolved = resolve_server_addr(&p.server_addr).await;
         let client = match IggyClientBuilder::new()
             .with_tcp()
-            .with_server_address(p.server_addr.clone())
+            .with_server_address(resolved)
             .build()
         {
             Ok(c) => c,
@@ -432,6 +437,35 @@ impl EventProducer {
                 }
             }
         });
+    }
+}
+
+/// Resolve a `host:port` address, converting DNS hostnames to IP addresses.
+/// The Iggy SDK only accepts raw IP addresses, so K8s service DNS names
+/// like `iggy.tracker.svc.cluster.local:8090` must be resolved first.
+/// If the host is already an IP address, it is returned unchanged.
+pub async fn resolve_server_addr(addr: &str) -> String {
+    use tokio::net::lookup_host;
+
+    // Try parsing as-is first (already an IP:port)
+    if addr.parse::<std::net::SocketAddr>().is_ok() {
+        return addr.to_string();
+    }
+
+    // Resolve DNS hostname to IP
+    match lookup_host(addr).await {
+        Ok(mut addrs) => {
+            if let Some(resolved) = addrs.next() {
+                format!("{}:{}", resolved.ip(), resolved.port())
+            } else {
+                warn!("DNS resolution returned no addresses for {}, using as-is", addr);
+                addr.to_string()
+            }
+        }
+        Err(e) => {
+            warn!("DNS resolution failed for {}: {} — using as-is", addr, e);
+            addr.to_string()
+        }
     }
 }
 

@@ -6,7 +6,6 @@ metadata:
   name: iggy
   namespace: tracker
 spec:
-  clusterIP: None
   selector:
     app: iggy
   ports:

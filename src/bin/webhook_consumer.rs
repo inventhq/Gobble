@@ -395,9 +395,10 @@ async fn main() {
     info!("Turso: {}", turso_url);
 
     // --- Connect to Iggy ---
+    let resolved_iggy = tracker_core::producer::resolve_server_addr(&iggy_url).await;
     let client = IggyClientBuilder::new()
         .with_tcp()
-        .with_server_address(iggy_url.clone())
+        .with_server_address(resolved_iggy.clone())
         .build()
         .expect("Failed to build Iggy client");
 
