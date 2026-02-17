@@ -33,6 +33,28 @@ app.use("/*", async (c, next) => {
   return next();
 });
 
+// Root landing page (no auth)
+app.get("/", (c) => {
+  return c.json({
+    service: "platform-api",
+    description: "Tracker Platform API — tenant management, analytics, webhooks",
+    endpoints: {
+      "GET /health": "Health check",
+      "GET /api/tenants": "List tenants",
+      "POST /api/tenants": "Create tenant",
+      "GET /api/keys": "List API keys",
+      "GET /api/events": "Query events",
+      "GET /api/tracking-urls": "List tracking URLs",
+      "GET /api/webhooks": "List webhooks",
+      "GET /api/filter-rules": "List filter rules",
+      "GET /api/ingest-tokens": "List ingest tokens",
+      "POST /api/chat": "AI-powered analytics chat",
+    },
+    auth: "All /api/* routes require Authorization: Bearer <api_key>",
+    docs: "https://github.com/inventhq/tracker",
+  });
+});
+
 // Public health check (no auth)
 app.get("/health", (c) => {
   return c.json({ status: "ok", service: "platform-api" });

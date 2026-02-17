@@ -87,6 +87,7 @@ async fn main() {
         .allow_headers(tower_http::cors::Any);
 
     let app = Router::new()
+        .route("/", get(root_handler))
         .route("/sse/events", get(sse_handler))
         .route("/health", get(health_handler))
         .layer(cors)
@@ -434,6 +435,19 @@ async fn sse_handler(
             .interval(Duration::from_secs(15))
             .text("keep-alive"),
     )
+}
+
+/// Root landing page.
+async fn root_handler() -> Json<serde_json::Value> {
+    Json(json!({
+        "service": "sse-gateway",
+        "description": "Real-time event streaming via Server-Sent Events",
+        "endpoints": {
+            "GET /sse/events?key_prefix=<prefix>": "SSE stream of events for a tenant",
+            "GET /health": "Health check"
+        },
+        "docs": "https://github.com/inventhq/tracker"
+    }))
 }
 
 /// Health check endpoint.

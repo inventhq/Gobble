@@ -95,6 +95,26 @@ fn rate_limited_response() -> Response {
         .into_response()
 }
 
+/// `GET /` — Service info landing page.
+pub async fn handle_root() -> Response {
+    let body = serde_json::json!({
+        "service": "tracker-core",
+        "description": "High-performance event tracking & ingestion server",
+        "endpoints": {
+            "GET /health": "Health check with event counters",
+            "GET /health/broker": "Iggy broker readiness",
+            "GET /t?url=<signed_url>": "Click tracking (307 redirect)",
+            "GET /t/<tu_id>": "Tracked URL click (307 redirect)",
+            "GET /p": "Postback tracking",
+            "GET /i": "Impression tracking (1x1 GIF)",
+            "POST /batch": "Bulk event ingestion (JSON array)",
+            "POST /ingest": "External event ingestion (Bearer token auth)"
+        },
+        "docs": "https://github.com/inventhq/tracker"
+    });
+    (StatusCode::OK, [("content-type", "application/json")], body.to_string()).into_response()
+}
+
 /// `GET /health` — Returns JSON with server status, Iggy connection state,
 /// and the total number of events processed since startup.
 pub async fn handle_health(State(state): State<AppState>) -> Response {

@@ -127,6 +127,7 @@ async fn main() {
     };
 
     let app = Router::new()
+        .route("/", get(routes::handle_root))
         .route("/health", get(routes::handle_health))
         .route("/health/broker", get(routes::handle_broker_health))
         .route("/t", get(routes::handle_click))
