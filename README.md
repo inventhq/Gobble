@@ -104,11 +104,15 @@ Every event published to Iggy:
 |----------|--------|---------|----------|
 | `/t` | GET | Click tracking (signed/encrypted URL) | 307 redirect |
 | `/t/:tu_id` | GET | Short URL click (tracking URL registry) | 307 redirect |
+| `/t/auto` | POST | Browser beacon (pageviews, outbound clicks) | 204 No Content |
 | `/p` | GET | Postback / server-to-server conversion | 200 OK |
 | `/i` | GET | Impression tracking | 1x1 transparent GIF |
 | `/batch` | POST | Bulk event ingestion (up to 10K events) | `{"accepted": N}` |
+| `/ingest` | POST | Authenticated external event ingestion | `{"event_id": "..."}` |
 | `/health` | GET | Health check | JSON status |
 | `/health/broker` | GET | Iggy connection status | 200 or 503 |
+
+Click redirects (`/t`, `/t/:tu_id`) automatically append `?ad_click_id=<event_id>` to the destination URL, enabling session stitching with the browser beacon.
 
 ## URL Security
 
@@ -253,6 +257,7 @@ tracker/
 ├── packages/
 │   ├── platform-api/                  # Hono + Cloudflare Workers (API layer)
 │   ├── app/                           # SvelteKit 5 dashboard
+│   ├── beacon/                        # Browser beacon script (t.js) + CF Worker CDN
 │   ├── sdk-typescript/                # TypeScript SDK (zero deps)
 │   ├── mcp-server/                    # MCP server (26 tools)
 │   ├── polars-query/                  # DataFusion cold tier service
@@ -282,19 +287,50 @@ tracker/
 | SDK | TypeScript (zero deps) | Pure functions, Node.js crypto only |
 | AI | MCP (26 tools) + Vivgrid | AI-native management interface |
 
-## TypeScript SDK
+## Client-Side Tracking (Browser Beacon)
+
+Automatic, cookieless pageview and outbound click tracking. Drop a single script tag on any page:
+
+```html
+<script src="https://js.juicyapi.com/t.js" data-key="YOUR_KEY_PREFIX" async defer></script>
+```
+
+This automatically tracks:
+- **Pageviews** on load and SPA navigations (pushState/replaceState/popstate)
+- **Outbound link clicks** with href and link text
+- **Ad attribution** — reads `ad_click_id` from the URL (appended by `/t` redirects) and includes it in every event
+
+All events are sent via `navigator.sendBeacon()` to `POST /t/auto`. Zero cookies, zero localStorage, zero fingerprinting.
+
+| Attribute | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `data-key` | **Yes** | — | Your tenant `key_prefix` |
+| `data-host` | No | `https://track.juicyapi.com` | Tracker-core server URL |
+| `data-track` | No | `"outbound"` | `"outbound"`, `"all"`, or `"none"` |
+| `data-no-spa` | No | — | Disables SPA history tracking |
+
+**npm:** `npm install @inventhq/tracker-beacon` — see [`packages/beacon/README.md`](packages/beacon/README.md) for full docs.
+
+## Server-Side SDK (TypeScript)
+
+Generate signed/encrypted tracking URLs, postback URLs, impression pixels, and batch-send events. Zero dependencies.
+
+```bash
+npm install @inventhq/tracker-sdk
+```
 
 ```typescript
-import { buildSignedClickUrl, TrackerClient } from "@tracker/sdk";
+import { buildSignedClickUrl, TrackerClient } from "@inventhq/tracker-sdk";
 
 // Generate a signed click URL (pure function, no network)
-const url = buildSignedClickUrl("https://track.example.com", "secret", "https://offer.com/landing", {
+const url = buildSignedClickUrl("https://track.juicyapi.com", "secret", "https://offer.com/landing", {
+  key_prefix: "6vct",
   offer_id: "123",
 });
 
 // Batch client for high-throughput server-side ingestion
 const client = new TrackerClient({
-  apiUrl: "https://track.example.com",
+  apiUrl: "https://track.juicyapi.com",
   mode: "signed",
   hmacSecret: "secret",
   batchSize: 100,
@@ -302,4 +338,20 @@ const client = new TrackerClient({
 });
 ```
 
-See [`packages/sdk-typescript/README.md`](packages/sdk-typescript/README.md) for full documentation.
+See [`packages/sdk-typescript/README.md`](packages/sdk-typescript/README.md) for full API reference.
+
+## Onboarding
+
+New to the platform? See the **[Onboarding Guide](docs/onboarding.md)** for step-by-step integration instructions covering:
+- Getting your tenant credentials
+- Adding the browser beacon to any site (Next.js, React, Vue, WordPress, plain HTML)
+- Generating server-side tracking URLs
+- End-to-end ad attribution (session stitching)
+- Verification and troubleshooting
+
+## npm Packages
+
+| Package | Description | Install |
+|---------|-------------|----------|
+| [`@inventhq/tracker-beacon`](https://www.npmjs.com/package/@inventhq/tracker-beacon) | Browser beacon — cookieless pageview & click tracking | `npm i @inventhq/tracker-beacon` |
+| [`@inventhq/tracker-sdk`](https://www.npmjs.com/package/@inventhq/tracker-sdk) | Server-side SDK — URL generation & batch events | `npm i @inventhq/tracker-sdk` |
