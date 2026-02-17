@@ -69,7 +69,16 @@ data:
 
     [http.jwt]
     algorithm = "HS256"
+    issuer = "iggy.apache.org"
     audience = "iggy.rs"
+    valid_issuers = ["iggy.apache.org"]
+    valid_audiences = ["iggy.rs"]
+    access_token_expiry = "1 hour"
+    not_before = "0 seconds"
+    clock_skew = "5 seconds"
+    use_base64_secret = false
+    encoding_secret = "tracker_iggy_jwt_secret_85eafcd6ac40089b4c21864fd0645dbe"
+    decoding_secret = "tracker_iggy_jwt_secret_85eafcd6ac40089b4c21864fd0645dbe"
 
     [quic]
     enabled = false

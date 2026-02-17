@@ -17,8 +17,10 @@ data:
   RUST_LOG: "info"
 
   # Service URLs (internal K8s DNS)
-  PLATFORM_API_URL: "https://platform-api.your-domain.com"
+  PLATFORM_API_URL: "https://tracker-platform-api.global-takeover7.workers.dev"
   PLUGIN_RUNTIME_URL: "http://plugin-runtime.tracker.svc.cluster.local:3050"
+  INGEST_URL: "http://tracker-core.tracker.svc.cluster.local:80/ingest"
+  SSE_GATEWAY_URL: "http://sse-gateway.tracker.svc.cluster.local:80"
 
   # R2
   R2_BUCKET: "tracker-events"

@@ -406,9 +406,23 @@ async fn main() {
         .expect("Failed to create RisingWave connection pool");
     info!("RisingWave pool created (max_size={})", config.pool_size);
 
-    ensure_schema(&pool)
-        .await
-        .expect("Failed to ensure RisingWave schema");
+    // Retry schema creation — RisingWave Cloud may need GRANT CREATE ON SCHEMA public TO <user>
+    let mut schema_ok = false;
+    for attempt in 1..=10 {
+        match ensure_schema(&pool).await {
+            Ok(()) => { schema_ok = true; break; }
+            Err(e) => {
+                warn!("Schema ensure attempt {attempt}/10 failed: {e}");
+                if attempt == 10 {
+                    error!("Could not create RisingWave schema after 10 attempts. \
+                            Grant CREATE on public schema to the RisingWave user, then restart.");
+                    loop { tokio::time::sleep(std::time::Duration::from_secs(3600)).await; }
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+            }
+        }
+    }
+    assert!(schema_ok);
 
     // --- Graceful shutdown signal ---
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);

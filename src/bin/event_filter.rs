@@ -310,8 +310,9 @@ async fn load_rules_from_turso(turso_url: &str, turso_token: &str) -> Vec<Filter
     let url = turso_url.replace("libsql://", "https://");
 
     let body = serde_json::json!({
-        "statements": [
-            {"q": "SELECT tenant_id, field, operator, value, action FROM filter_rules WHERE active = 1"}
+        "requests": [
+            {"type": "execute", "stmt": {"sql": "SELECT tenant_id, field, operator, value, action FROM filter_rules WHERE active = 1"}},
+            {"type": "close"}
         ]
     });
 
