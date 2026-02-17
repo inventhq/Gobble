@@ -160,6 +160,22 @@ jobs:
             --docker-username=${{ github.actor }} \
             --docker-password=${{ secrets.GHCR_PAT }}
 
+      - name: Create/update tracker-secrets
+        run: |
+          kubectl -n tracker delete secret tracker-secrets --ignore-not-found
+          kubectl -n tracker create secret generic tracker-secrets \
+            --from-literal=HMAC_SECRET="${{ secrets.HMAC_SECRET }}" \
+            --from-literal=PLATFORM_API_KEY="${{ secrets.PLATFORM_API_KEY }}" \
+            --from-literal=ADMIN_API_KEY="${{ secrets.ADMIN_API_KEY }}" \
+            --from-literal=TURSO_URL="${{ secrets.TURSO_URL }}" \
+            --from-literal=TURSO_AUTH_TOKEN="${{ secrets.TURSO_AUTH_TOKEN }}" \
+            --from-literal=RISINGWAVE_URL="${{ secrets.RISINGWAVE_URL }}" \
+            --from-literal=R2_ENDPOINT="${{ secrets.R2_ENDPOINT }}" \
+            --from-literal=R2_ACCESS_KEY_ID="${{ secrets.R2_ACCESS_KEY_ID }}" \
+            --from-literal=R2_SECRET_ACCESS_KEY="${{ secrets.R2_SECRET_ACCESS_KEY }}" \
+            --from-literal=LANCEDB_API_KEY="${{ secrets.LANCEDB_API_KEY }}" \
+            --from-literal=SLM_API_KEY="${{ secrets.SLM_API_KEY }}"
+
       - name: Update image tags in manifests
         run: |
           cd k8s

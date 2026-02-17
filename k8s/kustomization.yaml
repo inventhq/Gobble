@@ -6,7 +6,8 @@ namespace: tracker
 resources:
   - namespace.yaml
   - configmap.yaml
-  - secrets.yaml
+  # secrets.yaml is a TEMPLATE only — real secrets are created via kubectl in CI
+  # See deploy.yaml "Create/update secrets" step
   - iggy-config.yaml
   - iggy.yaml
   - tracker-core.yaml
