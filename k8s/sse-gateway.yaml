@@ -59,7 +59,7 @@ metadata:
   name: sse-gateway
   namespace: tracker
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: sse-gateway
   ports:

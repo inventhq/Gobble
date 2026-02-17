@@ -19,8 +19,8 @@ data:
   # Service URLs (internal K8s DNS)
   PLATFORM_API_URL: "https://api.juicyapi.com"
   PLUGIN_RUNTIME_URL: "http://plugin-runtime.tracker.svc.cluster.local:3050"
-  INGEST_URL: "http://tracker-core.tracker.svc.cluster.local:80/ingest"
-  SSE_GATEWAY_URL: "http://sse-gateway.tracker.svc.cluster.local:80"
+  INGEST_URL: "https://track.juicyapi.com/ingest"
+  SSE_GATEWAY_URL: "https://sse.juicyapi.com"
 
   # R2
   R2_BUCKET: "tracker-events"

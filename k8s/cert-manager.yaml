@@ -1,0 +1,36 @@
+---
+# ClusterIssuer: Let's Encrypt with Cloudflare DNS-01 challenge
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@juicyapi.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-account
+    solvers:
+      - dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: cloudflare-dns-token
+              key: api-token
+        selector:
+          dnsZones:
+            - "juicyapi.com"
+---
+# Certificate for track.juicyapi.com and sse.juicyapi.com
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: juicyapi-tls
+  namespace: tracker
+spec:
+  secretName: juicyapi-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - "track.juicyapi.com"
+    - "sse.juicyapi.com"

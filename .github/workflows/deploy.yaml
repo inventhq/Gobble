@@ -185,6 +185,8 @@ jobs:
       - name: Apply manifests
         run: |
           kubectl apply -k k8s/
+          kubectl apply -f k8s/cert-manager.yaml
+          kubectl apply -f k8s/ingress.yaml
 
       - name: Wait for rollout
         run: |

@@ -1,0 +1,71 @@
+---
+# Traefik LoadBalancer service — gives a stable external IP for HTTPS ingress
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik-lb
+  namespace: kube-system
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: traefik
+    app.kubernetes.io/instance: traefik-kube-system
+  ports:
+    - name: https
+      port: 443
+      targetPort: 443
+      protocol: TCP
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+---
+# Ingress: tracker-core (track.juicyapi.com)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tracker-core-ingress
+  namespace: tracker
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+    - hosts:
+        - track.juicyapi.com
+      secretName: juicyapi-tls
+  rules:
+    - host: track.juicyapi.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: tracker-core
+                port:
+                  number: 80
+---
+# Ingress: sse-gateway (sse.juicyapi.com)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sse-gateway-ingress
+  namespace: tracker
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+    - hosts:
+        - sse.juicyapi.com
+      secretName: juicyapi-tls
+  rules:
+    - host: sse.juicyapi.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sse-gateway
+                port:
+                  number: 80

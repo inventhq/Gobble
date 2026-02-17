@@ -16,3 +16,5 @@ resources:
   - polars-query.yaml
   - polars-lite.yaml
   - ai-query.yaml
+  # cert-manager.yaml and ingress.yaml are applied directly (not via kustomize)
+  # because they contain cross-namespace and cluster-scoped resources

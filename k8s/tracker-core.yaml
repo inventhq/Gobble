@@ -60,7 +60,7 @@ metadata:
   name: tracker-core
   namespace: tracker
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: tracker-core
   ports:
