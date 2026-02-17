@@ -1,0 +1,15 @@
+name = "tracker-beacon"
+main = "src/worker.ts"
+compatibility_date = "2024-09-23"
+account_id = "b7b8a3a728aac55c2d6c040c73b6b7ff"
+
+# Import t.js as a raw text string (not as executable JS)
+[[rules]]
+type = "Text"
+globs = ["**/*.js"]
+fallthrough = false
+
+# Custom domain: js.juicyapi.com
+routes = [
+  { pattern = "js.juicyapi.com/*", zone_id = "b1ee08dfa84ea1a02f83fa47c0f674c5" }
+]

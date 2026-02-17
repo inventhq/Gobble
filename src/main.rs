@@ -135,6 +135,8 @@ async fn main() {
         .route("/p", get(routes::handle_postback))
         .route("/i", get(routes::handle_impression))
         .route("/batch", post(routes::handle_batch))
+        .route("/t/auto", post(routes::handle_auto_beacon)
+            .layer(DefaultBodyLimit::max(16_384)))
         .route("/ingest", post(routes::handle_ingest)
             .layer(DefaultBodyLimit::max(1_048_576)))
         .with_state(state);

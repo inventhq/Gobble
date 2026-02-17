@@ -1,15 +1,19 @@
 //! HTTP endpoint handlers for the tracker-core server.
 //!
-//! Provides six routes:
+//! Provides eight routes:
 //! - **`GET /health`** — Health check with event counter and Iggy connection status.
 //! - **`GET /health/broker`** — Iggy broker readiness check (200 if connected, 503 if NOOP).
 //! - **`GET /t`** — Click tracking: validates the signed/encrypted URL, publishes
-//!   a `"click"` event, and returns a 307 redirect to the destination.
+//!   a `"click"` event, appends `ad_click_id`, and returns a 307 redirect.
+//! - **`GET /t/:tu_id`** — Short URL click tracking via tracking URL cache.
 //! - **`GET /p`** — Postback tracking: publishes a `"postback"` event and returns 200.
 //! - **`GET /i`** — Impression tracking: publishes an `"impression"` event and returns
 //!   a 1x1 transparent GIF with no-cache headers.
 //! - **`POST /batch`** — Bulk event ingestion: accepts a JSON array of pre-built
 //!   tracking events and enqueues them all in a single producer call.
+//! - **`POST /t/auto`** — Browser beacon endpoint: receives lightweight JSON from
+//!   the `t.js` script via `sendBeacon()`. Cookieless, no auth required.
+//! - **`POST /ingest`** — Authenticated external event ingestion via ingest tokens.
 //!
 //! All tracking endpoints capture the full HTTP context (IP, User-Agent, Referer,
 //! Accept-Language) and forward all query parameters as an opaque `params` map.
@@ -51,6 +55,18 @@ pub struct AppState {
     pub ingest_token_cache: IngestTokenCache,
     /// Per-tenant token bucket rate limiter.
     pub rate_limiter: RateLimiter,
+}
+
+/// Append `ad_click_id` to a destination URL so the beacon script can stitch
+/// the on-site session back to the ad click that brought the user.
+///
+/// Handles URLs with existing query strings (`&`) and bare URLs (`?`).
+fn append_ad_click_id(destination: &str, event_id: &str) -> String {
+    if destination.contains('?') {
+        format!("{}&ad_click_id={}", destination, event_id)
+    } else {
+        format!("{}?ad_click_id={}", destination, event_id)
+    }
 }
 
 /// Extract the client IP address from the request.
@@ -108,6 +124,7 @@ pub async fn handle_root() -> Response {
             "GET /p": "Postback tracking",
             "GET /i": "Impression tracking (1x1 GIF)",
             "POST /batch": "Bulk event ingestion (JSON array)",
+            "POST /t/auto": "Browser beacon (sendBeacon, cookieless auto-tracking)",
             "POST /ingest": "External event ingestion (Bearer token auth)"
         },
         "docs": "https://github.com/inventhq/tracker"
@@ -220,6 +237,9 @@ pub async fn handle_click(
         params,
     );
 
+    // Capture event_id before moving event into the spawn closure
+    let ad_click_id = event.event_id.clone();
+
     // Fire-and-forget: the background producer batches and flushes
     // asynchronously, so we don't need to await the send.
     let partition_key = event.params.get("key_prefix").cloned();
@@ -228,7 +248,10 @@ pub async fn handle_click(
         producer.send(&event, partition_key.as_deref()).await;
     });
 
-    Redirect::temporary(&destination).into_response()
+    // Append ad_click_id so the beacon script on the landing page can
+    // stitch on-site events back to this ad click.
+    let dest = append_ad_click_id(&destination, &ad_click_id);
+    Redirect::temporary(&dest).into_response()
 }
 
 /// `GET /t/:tu_id` — Tracked click via short URL.
@@ -303,13 +326,19 @@ pub async fn handle_tracked_click(
         params,
     );
 
+    // Capture event_id before moving event into the spawn closure
+    let ad_click_id = event.event_id.clone();
+
     let partition_key = event.params.get("key_prefix").cloned();
     let producer = state.producer.clone();
     tokio::spawn(async move {
         producer.send(&event, partition_key.as_deref()).await;
     });
 
-    Redirect::temporary(&entry.destination).into_response()
+    // Append ad_click_id so the beacon script on the landing page can
+    // stitch on-site events back to this ad click.
+    let dest = append_ad_click_id(&entry.destination, &ad_click_id);
+    Redirect::temporary(&dest).into_response()
 }
 
 /// `GET /p` — Postback / conversion tracking endpoint.
@@ -461,6 +490,96 @@ pub async fn handle_batch(
         format!(r#"{{"accepted":{}}}"#, count),
     )
         .into_response()
+}
+
+/// Request body for `POST /t/auto` — browser beacon events.
+#[derive(Debug, Deserialize)]
+pub struct AutoBeaconRequest {
+    /// Event type (e.g. "pageview", "outbound_click").
+    pub event_type: String,
+    /// Tenant key prefix — identifies which tenant owns this data.
+    pub key_prefix: String,
+    /// Page path where the event occurred.
+    #[serde(default)]
+    pub page: Option<String>,
+    /// Outbound link href (for outbound_click events).
+    #[serde(default)]
+    pub href: Option<String>,
+    /// Link text (for outbound_click events, truncated client-side).
+    #[serde(default)]
+    pub text: Option<String>,
+    /// Client-generated session ID (random, per page-load, no persistence).
+    #[serde(default)]
+    pub session_id: Option<String>,
+    /// Ad click ID from the redirect URL — stitches on-site events to ad clicks.
+    #[serde(default)]
+    pub ad_click_id: Option<String>,
+    /// Viewport width for device-class bucketing.
+    #[serde(default)]
+    pub screen_width: Option<u32>,
+}
+
+/// `POST /t/auto` — Browser beacon endpoint for automatic tracking.
+///
+/// Receives lightweight JSON payloads from the `t.js` beacon script via
+/// `navigator.sendBeacon()`. Cookieless — no persistent client state.
+/// Session identity is derived server-side from IP + UA + daily salt.
+///
+/// Returns `204 No Content` (sendBeacon ignores the response body).
+pub async fn handle_auto_beacon(
+    State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Json(req): Json<AutoBeaconRequest>,
+) -> Response {
+    if req.event_type.is_empty() || req.key_prefix.is_empty() {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+
+    // Rate limit by tenant key_prefix
+    if !state.rate_limiter.check(&req.key_prefix).await {
+        return rate_limited_response();
+    }
+
+    let mut params = HashMap::new();
+    params.insert("key_prefix".to_string(), req.key_prefix);
+    if let Some(page) = req.page {
+        params.insert("page".to_string(), page);
+    }
+    if let Some(href) = req.href {
+        params.insert("href".to_string(), href);
+    }
+    if let Some(text) = req.text {
+        params.insert("text".to_string(), text);
+    }
+    if let Some(sid) = req.session_id {
+        params.insert("session_id".to_string(), sid);
+    }
+    if let Some(acid) = req.ad_click_id {
+        params.insert("ad_click_id".to_string(), acid);
+    }
+    if let Some(sw) = req.screen_width {
+        params.insert("screen_width".to_string(), sw.to_string());
+    }
+
+    let event = TrackingEvent::new(
+        &req.event_type,
+        extract_ip(&headers, &addr),
+        extract_header(&headers, "user-agent").unwrap_or_default(),
+        extract_header(&headers, "referer"),
+        extract_header(&headers, "accept-language"),
+        "/t/auto",
+        extract_host(&headers),
+        params,
+    );
+
+    let partition_key = event.params.get("key_prefix").cloned();
+    let producer = state.producer.clone();
+    tokio::spawn(async move {
+        producer.send(&event, partition_key.as_deref()).await;
+    });
+
+    StatusCode::NO_CONTENT.into_response()
 }
 
 /// Request body for `POST /ingest` — external event ingestion.
