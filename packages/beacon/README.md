@@ -162,20 +162,6 @@ This is intentional — it provides per-page-load grouping without any persisten
 - **Fallback**: If `sendBeacon` is unavailable, falls back to synchronous `XMLHttpRequest`
 - **Script loading**: Use `async defer` attributes for non-blocking load
 
-## Architecture
-
-```
-Browser                          Cloudflare Edge              tracker-core (K8s)
-┌──────────┐                    ┌──────────────┐             ┌──────────────────┐
-│  t.js    │ ──sendBeacon()──→  │              │ ──proxy──→  │ POST /t/auto     │
-│ (4KB)    │                    │ js.juicyapi  │             │ (204 No Content) │
-│          │                    │   .com       │             │                  │
-│ pageview │                    │              │             │ → Iggy stream    │
-│ clicks   │                    │ CDN cached   │             │ → RisingWave     │
-│ SPA nav  │                    │ (1hr edge)   │             │ → Webhooks       │
-└──────────┘                    └──────────────┘             └──────────────────┘
-```
-
 ## Related Packages
 
 - **[@inventhq/tracker-sdk](https://www.npmjs.com/package/@inventhq/tracker-sdk)** — Server-side TypeScript SDK for generating signed/encrypted tracking URLs and batch event delivery.

@@ -1,6 +1,6 @@
 {
   "name": "@inventhq/tracker-beacon",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Cookieless browser beacon for automatic pageview and outbound click tracking. Drop-in script tag — zero cookies, zero fingerprinting, zero dependencies.",
   "main": "t.js",
   "files": [
