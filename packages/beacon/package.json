@@ -1,10 +1,39 @@
 {
-  "name": "@tracker/beacon",
+  "name": "@inventhq/tracker-beacon",
   "version": "0.1.0",
-  "private": true,
+  "description": "Cookieless browser beacon for automatic pageview and outbound click tracking. Drop-in script tag — zero cookies, zero fingerprinting, zero dependencies.",
+  "main": "t.js",
+  "files": [
+    "t.js",
+    "README.md"
+  ],
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"
+  },
+  "keywords": [
+    "tracker",
+    "beacon",
+    "analytics",
+    "pageview",
+    "click-tracking",
+    "cookieless",
+    "privacy",
+    "sendbeacon",
+    "web-analytics",
+    "attribution",
+    "ad-tech"
+  ],
+  "license": "MIT",
+  "author": "inventhq",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/inventhq/tracker.git",
+    "directory": "packages/beacon"
+  },
+  "homepage": "https://github.com/inventhq/tracker/tree/main/packages/beacon",
+  "publishConfig": {
+    "access": "public"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240512.0",

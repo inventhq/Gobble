@@ -1,7 +1,7 @@
 {
-  "name": "@tracker/sdk",
+  "name": "@inventhq/tracker-sdk",
   "version": "0.1.0",
-  "description": "TypeScript SDK for tracker-core — generate signed/encrypted tracking URLs and batch-send events",
+  "description": "TypeScript SDK for tracker-core — generate signed/encrypted tracking URLs, batch-send events, and build click/postback/impression links. Zero dependencies.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -13,6 +13,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "npm run build",
     "test": "node --import tsx --test src/**/*.test.ts",
     "lint": "tsc --noEmit"
   },
@@ -20,8 +21,18 @@
     "dist",
     "README.md"
   ],
-  "keywords": ["tracker", "tracking", "sdk", "clicks", "postbacks", "impressions"],
+  "keywords": ["tracker", "tracking", "sdk", "clicks", "postbacks", "impressions", "ad-tech", "analytics", "attribution", "click-tracking"],
   "license": "MIT",
+  "author": "inventhq",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/inventhq/tracker.git",
+    "directory": "packages/sdk-typescript"
+  },
+  "homepage": "https://github.com/inventhq/tracker/tree/main/packages/sdk-typescript",
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "tsx": "^4.7.0",
     "typescript": "^5.4.0",
