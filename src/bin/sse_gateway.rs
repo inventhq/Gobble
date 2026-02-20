@@ -123,6 +123,7 @@ async fn main() {
         .route("/", get(root_handler))
         .route("/sse/events", get(sse_handler))
         .route("/health", get(health_handler))
+        .route("/debug/iggy", get(debug_iggy_handler))
         .layer(cors)
         .with_state(state);
 
@@ -556,6 +557,63 @@ async fn health_handler(State(state): State<AppState>) -> Json<serde_json::Value
         },
         "poll_errors": d.poll_errors.load(Ordering::Relaxed),
         "sse_subscribers": state.tx.receiver_count(),
+    }))
+}
+
+/// Debug endpoint — polls Iggy HTTP API directly and returns raw results.
+async fn debug_iggy_handler() -> Json<serde_json::Value> {
+    let iggy_http_url = env::var("IGGY_HTTP_URL").unwrap_or_else(|_| "http://127.0.0.1:3000".into());
+    let stream = env::var("IGGY_STREAM").unwrap_or_else(|_| "tracker".into());
+    let topic = env::var("IGGY_TOPIC").unwrap_or_else(|_| "events".into());
+    let topic_clean = env::var("IGGY_TOPIC_CLEAN").unwrap_or_else(|_| "events-clean".into());
+
+    let http = reqwest::Client::new();
+
+    // Login
+    let token = match iggy_http_login(&http, &iggy_http_url).await {
+        Ok(t) => t,
+        Err(e) => return Json(json!({ "error": format!("login failed: {}", e), "iggy_http_url": iggy_http_url })),
+    };
+
+    // Poll partition 0, offset 0, count 1 from events topic
+    let events_url = format!(
+        "{}/streams/{}/topics/{}/messages?consumer_id=debug&partition_id=0&polling_strategy=offset&value=0&count=1",
+        iggy_http_url, stream, topic
+    );
+    let events_resp = http.get(&events_url)
+        .header("Authorization", format!("Bearer {}", token))
+        .send().await;
+    let events_raw = match events_resp {
+        Ok(r) => {
+            let status = r.status().as_u16();
+            let body = r.text().await.unwrap_or_else(|e| format!("read error: {}", e));
+            json!({ "status": status, "body_preview": &body[..body.len().min(500)] })
+        }
+        Err(e) => json!({ "error": format!("{}", e) }),
+    };
+
+    // Poll partition 0, offset 0, count 1 from events-clean topic
+    let clean_url = format!(
+        "{}/streams/{}/topics/{}/messages?consumer_id=debug&partition_id=0&polling_strategy=offset&value=0&count=1",
+        iggy_http_url, stream, topic_clean
+    );
+    let clean_resp = http.get(&clean_url)
+        .header("Authorization", format!("Bearer {}", token))
+        .send().await;
+    let clean_raw = match clean_resp {
+        Ok(r) => {
+            let status = r.status().as_u16();
+            let body = r.text().await.unwrap_or_else(|e| format!("read error: {}", e));
+            json!({ "status": status, "body_preview": &body[..body.len().min(500)] })
+        }
+        Err(e) => json!({ "error": format!("{}", e) }),
+    };
+
+    Json(json!({
+        "iggy_http_url": iggy_http_url,
+        "login": "ok",
+        "events_topic": { "url": events_url, "response": events_raw },
+        "events_clean_topic": { "url": clean_url, "response": clean_raw },
     }))
 }
 
