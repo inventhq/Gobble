@@ -38,11 +38,22 @@ use tracker_core::event::TrackingEvent;
 /// If a slow client falls behind, it will miss events (acceptable for SSE).
 const BROADCAST_CAPACITY: usize = 4096;
 
+/// Shared diagnostic counters for consumer loops.
+struct DiagCounters {
+    events_broadcast: AtomicU64,
+    events_broadcast_clean: AtomicU64,
+    poll_errors: AtomicU64,
+    consumer_started: AtomicU64,
+    consumer_clean_started: AtomicU64,
+}
+
 /// Shared application state for SSE handlers.
 #[derive(Clone)]
 struct AppState {
     /// Broadcast sender — Iggy consumer pushes events here, SSE handlers subscribe.
     tx: broadcast::Sender<Arc<TrackingEvent>>,
+    /// Diagnostic counters for health reporting.
+    diag: Arc<DiagCounters>,
 }
 
 #[tokio::main]
@@ -72,22 +83,34 @@ async fn main() {
     // --- Broadcast channel for fan-out ---
     let (tx, _) = broadcast::channel::<Arc<TrackingEvent>>(BROADCAST_CAPACITY);
 
-    let state = AppState { tx: tx.clone() };
+    let diag = Arc::new(DiagCounters {
+        events_broadcast: AtomicU64::new(0),
+        events_broadcast_clean: AtomicU64::new(0),
+        poll_errors: AtomicU64::new(0),
+        consumer_started: AtomicU64::new(0),
+        consumer_clean_started: AtomicU64::new(0),
+    });
+
+    let state = AppState { tx: tx.clone(), diag: diag.clone() };
 
     // --- Spawn Iggy consumer task for raw events topic ---
     let iggy_url_clone = iggy_url.clone();
     let iggy_http_url_clone = iggy_http_url.clone();
     let iggy_stream_clone = iggy_stream.clone();
     let tx_clone = tx.clone();
+    let diag_clone = diag.clone();
     tokio::spawn(async move {
-        iggy_consumer_loop(iggy_url_clone, iggy_http_url_clone, iggy_stream_clone, iggy_topic, tx_clone, "sse-gateway").await;
+        diag_clone.consumer_started.store(1, Ordering::Relaxed);
+        iggy_consumer_loop(iggy_url_clone, iggy_http_url_clone, iggy_stream_clone, iggy_topic, tx_clone, "sse-gateway", &diag_clone.events_broadcast, &diag_clone.poll_errors).await;
     });
 
     // --- Spawn Iggy consumer task for clean/ingest events topic ---
     let iggy_url_clone2 = iggy_url.clone();
     let iggy_http_url_clone2 = iggy_http_url.clone();
+    let diag_clone2 = diag.clone();
     tokio::spawn(async move {
-        iggy_consumer_loop(iggy_url_clone2, iggy_http_url_clone2, iggy_stream, iggy_topic_clean, tx, "sse-gateway-clean").await;
+        diag_clone2.consumer_clean_started.store(1, Ordering::Relaxed);
+        iggy_consumer_loop(iggy_url_clone2, iggy_http_url_clone2, iggy_stream, iggy_topic_clean, tx, "sse-gateway-clean", &diag_clone2.events_broadcast_clean, &diag_clone2.poll_errors).await;
     });
 
     // --- Axum HTTP server with CORS ---
@@ -130,6 +153,8 @@ async fn iggy_consumer_loop(
     topic_name: String,
     tx: broadcast::Sender<Arc<TrackingEvent>>,
     consumer_name: &str,
+    events_counter: &AtomicU64,
+    error_counter: &AtomicU64,
 ) {
     // TCP client for offset management only
     let resolved_iggy = tracker_core::producer::resolve_server_addr(&iggy_url).await;
@@ -156,14 +181,23 @@ async fn iggy_consumer_loop(
     let stream_id = Identifier::named(&stream_name).unwrap();
     let topic_id = Identifier::named(&topic_name).unwrap();
 
-    // Discover partition count
-    let topic_info = client
-        .get_topic(&stream_id, &topic_id)
-        .await
-        .expect("Failed to get topic info")
-        .unwrap();
-    let partition_count = topic_info.partitions_count;
-    info!("Topic {} has {} partitions", topic_name, partition_count);
+    // Discover partition count — retry if topic doesn't exist yet
+    let partition_count = loop {
+        match client.get_topic(&stream_id, &topic_id).await {
+            Ok(Some(info)) => {
+                info!("[{}] Topic {} has {} partitions", consumer_name, topic_name, info.partitions_count);
+                break info.partitions_count;
+            }
+            Ok(None) => {
+                warn!("[{}] Topic {} not found, retrying in 5s...", consumer_name, topic_name);
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+            Err(e) => {
+                warn!("[{}] Failed to get topic {}: {} — retrying in 5s...", consumer_name, topic_name, e);
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+        }
+    };
 
     // Load stored offsets for each partition
     let mut next_offset: HashMap<u32, u64> = HashMap::new();
@@ -208,7 +242,8 @@ async fn iggy_consumer_loop(
             ).await {
                 Ok(m) => m,
                 Err(e) => {
-                    error!("Failed to poll partition {}: {}", pid, e);
+                    error_counter.fetch_add(1, Ordering::Relaxed);
+                    error!("[{}] Failed to poll partition {}: {}", consumer_name, pid, e);
                     continue;
                 }
             };
@@ -235,12 +270,13 @@ async fn iggy_consumer_loop(
                 };
 
                 count += 1;
+                events_counter.fetch_add(1, Ordering::Relaxed);
 
                 // Broadcast to all connected SSE clients (ignore send errors — means no receivers)
                 let _ = tx.send(Arc::new(event));
 
                 if count % 1000 == 0 {
-                    info!("Broadcast {} events to SSE clients", count);
+                    info!("[{}] Broadcast {} events to SSE clients", consumer_name, count);
                 }
             }
         }
@@ -461,9 +497,25 @@ async fn root_handler() -> Json<serde_json::Value> {
     }))
 }
 
-/// Health check endpoint.
-async fn health_handler() -> Json<serde_json::Value> {
-    Json(json!({ "status": "ok", "service": "sse-gateway" }))
+/// Health check endpoint with diagnostic counters.
+async fn health_handler(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let d = &state.diag;
+    Json(json!({
+        "status": "ok",
+        "service": "sse-gateway",
+        "consumers": {
+            "events": {
+                "started": d.consumer_started.load(Ordering::Relaxed) == 1,
+                "events_broadcast": d.events_broadcast.load(Ordering::Relaxed),
+            },
+            "events_clean": {
+                "started": d.consumer_clean_started.load(Ordering::Relaxed) == 1,
+                "events_broadcast": d.events_broadcast_clean.load(Ordering::Relaxed),
+            },
+        },
+        "poll_errors": d.poll_errors.load(Ordering::Relaxed),
+        "sse_subscribers": state.tx.receiver_count(),
+    }))
 }
 
 /// Wait for a shutdown signal (Ctrl+C or SIGTERM).
