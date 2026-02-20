@@ -120,11 +120,18 @@ impl EventProducer {
                     Err(_) => info!("Stream already exists: {}", stream_name),
                 }
 
-                // Build the producer in DIRECT mode for reliable delivery.
-                // Direct mode waits for Iggy confirmation on each send.
-                // TODO: re-enable background mode after diagnosing silent flush failures.
+                // Build the producer in BACKGROUND mode for maximum throughput.
+                // Background mode uses sharded workers that batch messages and
+                // flush them asynchronously — send() returns immediately.
                 let producer = client
                     .producer(stream_name, topic_name)?
+                    .background(
+                        BackgroundConfig::builder()
+                            .batch_length(1000)
+                            .linger_time(IggyDuration::from(1))
+                            .max_buffer_size(IggyByteSize::from(MAX_BUFFER_BYTES))
+                            .build(),
+                    )
                     .partitioning(Partitioning::balanced())
                     .create_topic_if_not_exists(
                         partitions,
