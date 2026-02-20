@@ -560,12 +560,13 @@ async fn health_handler(State(state): State<AppState>) -> Json<serde_json::Value
     }))
 }
 
-/// Debug endpoint — polls Iggy HTTP API directly and returns raw results.
+/// Debug endpoint — comprehensive Iggy diagnostics.
+/// Checks topic stats, scans all partitions, reports which have data.
 async fn debug_iggy_handler() -> Json<serde_json::Value> {
     let iggy_http_url = env::var("IGGY_HTTP_URL").unwrap_or_else(|_| "http://127.0.0.1:3000".into());
     let stream = env::var("IGGY_STREAM").unwrap_or_else(|_| "tracker".into());
-    let topic = env::var("IGGY_TOPIC").unwrap_or_else(|_| "events".into());
-    let topic_clean = env::var("IGGY_TOPIC_CLEAN").unwrap_or_else(|_| "events-clean".into());
+    let topic_name = env::var("IGGY_TOPIC").unwrap_or_else(|_| "events".into());
+    let topic_clean_name = env::var("IGGY_TOPIC_CLEAN").unwrap_or_else(|_| "events-clean".into());
 
     let http = reqwest::Client::new();
 
@@ -575,45 +576,77 @@ async fn debug_iggy_handler() -> Json<serde_json::Value> {
         Err(e) => return Json(json!({ "error": format!("login failed: {}", e), "iggy_http_url": iggy_http_url })),
     };
 
-    // Poll partition 0, offset 0, count 1 from events topic
-    let events_url = format!(
-        "{}/streams/{}/topics/{}/messages?consumer_id=debug&partition_id=0&polling_strategy=offset&value=0&count=1",
-        iggy_http_url, stream, topic
-    );
-    let events_resp = http.get(&events_url)
-        .header("Authorization", format!("Bearer {}", token))
-        .send().await;
-    let events_raw = match events_resp {
-        Ok(r) => {
-            let status = r.status().as_u16();
-            let body = r.text().await.unwrap_or_else(|e| format!("read error: {}", e));
-            json!({ "status": status, "body_preview": &body[..body.len().min(500)] })
+    // Helper: get topic info (partition count + stats)
+    let topic_info = |topic: &str| {
+        let url = format!("{}/streams/{}/topics/{}", iggy_http_url, stream, topic);
+        let http = http.clone();
+        let token = token.clone();
+        async move {
+            match http.get(&url).header("Authorization", format!("Bearer {}", token)).send().await {
+                Ok(r) => {
+                    let status = r.status().as_u16();
+                    let body = r.text().await.unwrap_or_default();
+                    json!({ "status": status, "body": serde_json::from_str::<serde_json::Value>(&body).unwrap_or(json!(body)) })
+                }
+                Err(e) => json!({ "error": format!("{}", e) }),
+            }
         }
-        Err(e) => json!({ "error": format!("{}", e) }),
     };
 
-    // Poll partition 0, offset 0, count 1 from events-clean topic
-    let clean_url = format!(
-        "{}/streams/{}/topics/{}/messages?consumer_id=debug&partition_id=0&polling_strategy=offset&value=0&count=1",
-        iggy_http_url, stream, topic_clean
-    );
-    let clean_resp = http.get(&clean_url)
-        .header("Authorization", format!("Bearer {}", token))
-        .send().await;
-    let clean_raw = match clean_resp {
-        Ok(r) => {
-            let status = r.status().as_u16();
-            let body = r.text().await.unwrap_or_else(|e| format!("read error: {}", e));
-            json!({ "status": status, "body_preview": &body[..body.len().min(500)] })
+    // Helper: scan all partitions for a topic, report which ones have data
+    let scan_partitions = |topic: String, partitions: u32| {
+        let http = http.clone();
+        let token = token.clone();
+        let iggy_http_url = iggy_http_url.clone();
+        let stream = stream.clone();
+        async move {
+            let mut results = Vec::new();
+            for pid in 0..partitions {
+                let url = format!(
+                    "{}/streams/{}/topics/{}/messages?consumer_id=debug&partition_id={}&polling_strategy=offset&value=0&count=1",
+                    iggy_http_url, stream, topic, pid
+                );
+                match http.get(&url).header("Authorization", format!("Bearer {}", token)).send().await {
+                    Ok(r) => {
+                        let body: serde_json::Value = r.json().await.unwrap_or(json!({}));
+                        let count = body.get("count").and_then(|c| c.as_u64()).unwrap_or(0);
+                        let current_offset = body.get("current_offset").and_then(|c| c.as_u64()).unwrap_or(0);
+                        if count > 0 || current_offset > 0 {
+                            results.push(json!({ "partition": pid, "count": count, "current_offset": current_offset }));
+                        }
+                    }
+                    Err(_) => {}
+                }
+            }
+            results
         }
-        Err(e) => json!({ "error": format!("{}", e) }),
     };
+
+    let events_info = topic_info(&topic_name).await;
+    let clean_info = topic_info(&topic_clean_name).await;
+
+    // Extract partition counts
+    let events_partitions = events_info.pointer("/body/partitions_count")
+        .and_then(|v| v.as_u64()).unwrap_or(24) as u32;
+    let clean_partitions = clean_info.pointer("/body/partitions_count")
+        .and_then(|v| v.as_u64()).unwrap_or(24) as u32;
+
+    let events_data = scan_partitions(topic_name.clone(), events_partitions).await;
+    let clean_data = scan_partitions(topic_clean_name.clone(), clean_partitions).await;
 
     Json(json!({
         "iggy_http_url": iggy_http_url,
         "login": "ok",
-        "events_topic": { "url": events_url, "response": events_raw },
-        "events_clean_topic": { "url": clean_url, "response": clean_raw },
+        "events_topic": {
+            "name": topic_name,
+            "info": events_info,
+            "partitions_with_data": events_data,
+        },
+        "events_clean_topic": {
+            "name": topic_clean_name,
+            "info": clean_info,
+            "partitions_with_data": clean_data,
+        },
     }))
 }
 
