@@ -22,6 +22,7 @@ use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
 use tracker_core::event::TrackingEvent;
+use tracker_core::health::{HealthCounters, spawn_health_server};
 
 /// Maximum delivery attempts per webhook per event.
 const MAX_ATTEMPTS: u32 = 3;
@@ -387,7 +388,7 @@ async fn main() {
 
     let iggy_url = env::var("IGGY_URL").unwrap_or_else(|_| "127.0.0.1:8090".into());
     let iggy_stream = env::var("IGGY_STREAM").unwrap_or_else(|_| "tracker".into());
-    let iggy_topic = env::var("IGGY_TOPIC").unwrap_or_else(|_| "events".into());
+    let iggy_topic = env::var("IGGY_TOPIC_CLEAN").unwrap_or_else(|_| "events-clean".into());
     let turso_url = match env::var("TURSO_URL") {
         Ok(u) if !u.is_empty() && u != "CHANGE_ME" => u,
         _ => {
@@ -441,6 +442,13 @@ async fn main() {
 
     info!("Webhook dispatcher ready");
 
+    // --- Health server ---
+    let health_port: u16 = env::var("HEALTH_PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(3040);
+    let health = HealthCounters::new("webhook-consumer", &[
+        "events_processed", "webhooks_dispatched", "deduped", "errors", "offsets_committed",
+    ]);
+    spawn_health_server(health.clone(), health_port);
+
     // --- Dedup set: tracks recently seen event_ids to prevent duplicate deliveries ---
     let mut seen_ids: HashSet<String> = HashSet::with_capacity(DEDUP_CAPACITY);
     let mut seen_order: VecDeque<String> = VecDeque::with_capacity(DEDUP_CAPACITY);
@@ -476,10 +484,12 @@ async fn main() {
 
                 let tenant = extract_tenant_prefix(&event);
                 events_processed += 1;
+                health.set("events_processed", events_processed);
 
                 // Dedup: skip if we've already processed this event_id
                 if seen_ids.contains(&event.event_id) {
                     deduped += 1;
+                    health.set("deduped", deduped);
                     continue;
                 }
 
@@ -548,8 +558,10 @@ async fn main() {
                         dispatch_webhook(&http, &turso, webhook, &event, &payload_json).await;
                     if success {
                         webhooks_dispatched += 1;
+                        health.set("webhooks_dispatched", webhooks_dispatched);
                     } else {
                         errors += 1;
+                        health.set("errors", errors);
                     }
                 }
 
@@ -558,6 +570,7 @@ async fn main() {
                     error!("Failed to commit offset {} for partition {}: {}", offset, partition_id, e);
                 } else {
                     offsets_committed += 1;
+                    health.set("offsets_committed", offsets_committed);
                 }
 
                 if events_processed % 1000 == 0 {

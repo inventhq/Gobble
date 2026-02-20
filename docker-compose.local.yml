@@ -1,0 +1,30 @@
+# Local E2E testing: Iggy server only.
+# tracker-core and sse-gateway run natively via cargo.
+# NOTE: Docker Hub apache/iggy:edge is 0.7.0 which is incompatible with SDK 0.8.x.
+# We build from the GitHub releases edge binary (same as production).
+services:
+  iggy:
+    build:
+      context: .
+      dockerfile: Dockerfile.iggy-local
+    ports:
+      - "8090:8090"   # TCP
+      - "3100:3000"   # HTTP (mapped to 3100 to avoid conflict with tracker-core on 3000)
+    volumes:
+      - iggy-data:/local_data
+    environment:
+      - IGGY_ROOT_USERNAME=iggy
+      - IGGY_ROOT_PASSWORD=iggy
+      - IGGY_TCP_ADDRESS=0.0.0.0:8090
+      - IGGY_HTTP_ADDRESS=0.0.0.0:3000
+      - IGGY_QUIC_ADDRESS=0.0.0.0:8080
+    security_opt:
+      - seccomp:unconfined
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8090 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  iggy-data:

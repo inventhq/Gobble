@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>God Mode — Tracker Pipeline Health</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --card: #12121a;
+    --border: #1e1e2e;
+    --text: #e0e0e8;
+    --dim: #6b6b80;
+    --green: #22c55e;
+    --red: #ef4444;
+    --yellow: #eab308;
+    --blue: #3b82f6;
+    --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.3px; }
+  header h1 span { color: var(--dim); font-weight: 400; }
+  .controls { display: flex; gap: 12px; align-items: center; }
+  .controls label { color: var(--dim); font-size: 13px; }
+  .controls input, .controls select {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: var(--mono);
+  }
+  .controls button {
+    background: var(--blue);
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .controls button:hover { opacity: 0.9; }
+  .pipeline-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .dot.green { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .dot.red { background: var(--red); box-shadow: 0 0 8px var(--red); }
+  .dot.yellow { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+  .dot.gray { background: var(--dim); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    transition: border-color 0.2s;
+  }
+  .card.ok { border-left: 3px solid var(--green); }
+  .card.down { border-left: 3px solid var(--red); }
+  .card.degraded { border-left: 3px solid var(--yellow); }
+  .card.pending { border-left: 3px solid var(--dim); opacity: 0.5; }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .card-header h2 { font-size: 14px; font-weight: 600; }
+  .card-header .badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge.ok { background: rgba(34,197,94,0.15); color: var(--green); }
+  .badge.down { background: rgba(239,68,68,0.15); color: var(--red); }
+  .badge.pending { background: rgba(107,107,128,0.15); color: var(--dim); }
+
+  .counters {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .counter {
+    background: var(--bg);
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+  .counter .label { font-size: 11px; color: var(--dim); margin-bottom: 2px; }
+  .counter .value { font-size: 16px; font-family: var(--mono); font-weight: 600; }
+
+  .meta { margin-top: 10px; font-size: 11px; color: var(--dim); font-family: var(--mono); }
+
+  .refresh-bar {
+    margin-top: 20px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--dim);
+  }
+  #error-banner {
+    display: none;
+    background: rgba(239,68,68,0.1);
+    border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--red);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>God Mode <span>/ Pipeline Health</span></h1>
+  </div>
+  <div class="controls">
+    <label>Base URL:</label>
+    <select id="env-select">
+      <option value="production">Production</option>
+      <option value="local">Local</option>
+      <option value="custom">Custom</option>
+    </select>
+    <input id="base-url" placeholder="https://track.juicyapi.com" style="width: 260px;">
+    <label>Interval:</label>
+    <select id="interval-select">
+      <option value="5000">5s</option>
+      <option value="10000" selected>10s</option>
+      <option value="30000">30s</option>
+      <option value="0">Manual</option>
+    </select>
+    <button onclick="refreshAll()">Refresh</button>
+  </div>
+</header>
+
+<div id="error-banner"></div>
+
+<div class="pipeline-status" id="pipeline-status">
+  <span class="dot gray"></span>
+  <span>Waiting for first poll...</span>
+</div>
+
+<div class="grid" id="grid" style="margin-top: 16px;"></div>
+
+<div class="refresh-bar" id="refresh-bar">Last updated: never</div>
+
+<script>
+// Service definitions: name, health URL path, default port (local)
+const SERVICES = [
+  { name: 'tracker-core',        path: '/health',     localPort: 3000,  prodUrl: 'https://track.juicyapi.com' },
+  { name: 'sse-gateway',         path: '/health',     localPort: 3031,  prodUrl: 'https://sse.juicyapi.com' },
+  { name: 'event-filter',        path: '/health',     localPort: 3043,  prodUrl: null },
+  { name: 'webhook-consumer',    path: '/health',     localPort: 3040,  prodUrl: null },
+  { name: 'risingwave-consumer', path: '/health',     localPort: 3041,  prodUrl: null },
+  { name: 'r2-archiver',         path: '/health',     localPort: 3042,  prodUrl: null },
+];
+
+let state = {};
+let intervalId = null;
+
+const envSelect = document.getElementById('env-select');
+const baseUrlInput = document.getElementById('base-url');
+const intervalSelect = document.getElementById('interval-select');
+
+envSelect.addEventListener('change', () => {
+  if (envSelect.value === 'production') {
+    baseUrlInput.value = '';
+    baseUrlInput.placeholder = 'Uses production URLs';
+    baseUrlInput.disabled = true;
+  } else if (envSelect.value === 'local') {
+    baseUrlInput.value = '';
+    baseUrlInput.placeholder = 'http://localhost:<port>';
+    baseUrlInput.disabled = true;
+  } else {
+    baseUrlInput.disabled = false;
+    baseUrlInput.placeholder = 'https://your-host.com';
+    baseUrlInput.focus();
+  }
+  refreshAll();
+});
+
+intervalSelect.addEventListener('change', () => {
+  clearInterval(intervalId);
+  const ms = parseInt(intervalSelect.value);
+  if (ms > 0) {
+    intervalId = setInterval(refreshAll, ms);
+  }
+});
+
+function getServiceUrl(svc) {
+  const env = envSelect.value;
+  if (env === 'production') {
+    // Only tracker-core and sse-gateway are publicly accessible in production
+    return svc.prodUrl ? svc.prodUrl + svc.path : null;
+  } else if (env === 'local') {
+    return `http://localhost:${svc.localPort}${svc.path}`;
+  } else {
+    const base = baseUrlInput.value.replace(/\/$/, '');
+    return base ? `${base}:${svc.localPort}${svc.path}` : null;
+  }
+}
+
+async function fetchHealth(svc) {
+  const url = getServiceUrl(svc);
+  if (!url) return { status: 'unreachable', error: 'No URL configured (internal service)' };
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+    const resp = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!resp.ok) return { status: 'down', error: `HTTP ${resp.status}` };
+    const data = await resp.json();
+    return { status: 'ok', data, url };
+  } catch (e) {
+    return { status: 'down', error: e.message, url };
+  }
+}
+
+function formatNumber(n) {
+  if (n === undefined || n === null) return '-';
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  return String(n);
+}
+
+function formatUptime(secs) {
+  if (!secs) return '-';
+  if (secs < 60) return `${secs}s`;
+  if (secs < 3600) return `${Math.floor(secs/60)}m ${secs%60}s`;
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  return `${h}h ${m}m`;
+}
+
+function renderCard(svc, result) {
+  const isOk = result.status === 'ok';
+  const isDown = result.status === 'down';
+  const statusClass = isOk ? 'ok' : isDown ? 'down' : 'pending';
+  const badgeText = isOk ? 'OK' : isDown ? 'DOWN' : 'N/A';
+
+  let countersHtml = '';
+  if (isOk && result.data) {
+    const d = result.data;
+    // Render counters from the generic health response
+    if (d.counters) {
+      for (const [key, val] of Object.entries(d.counters)) {
+        countersHtml += `
+          <div class="counter">
+            <div class="label">${key.replace(/_/g, ' ')}</div>
+            <div class="value">${formatNumber(val)}</div>
+          </div>`;
+      }
+    }
+    // tracker-core specific fields
+    if (d.events_sent !== undefined) {
+      countersHtml += `
+        <div class="counter">
+          <div class="label">events sent</div>
+          <div class="value">${formatNumber(d.events_sent)}</div>
+        </div>
+        <div class="counter">
+          <div class="label">events dropped</div>
+          <div class="value">${formatNumber(d.events_dropped)}</div>
+        </div>
+        <div class="counter">
+          <div class="label">iggy connected</div>
+          <div class="value">${d.iggy_connected ? 'Yes' : 'No'}</div>
+        </div>`;
+    }
+    // sse-gateway specific fields
+    if (d.sse_subscribers !== undefined) {
+      countersHtml += `
+        <div class="counter">
+          <div class="label">SSE subscribers</div>
+          <div class="value">${formatNumber(d.sse_subscribers)}</div>
+        </div>`;
+      if (d.consumers) {
+        for (const [topic, info] of Object.entries(d.consumers)) {
+          countersHtml += `
+            <div class="counter">
+              <div class="label">${topic} broadcast</div>
+              <div class="value">${formatNumber(info.events_broadcast)}</div>
+            </div>`;
+        }
+      }
+    }
+  }
+
+  const uptimeHtml = isOk && result.data?.uptime_secs
+    ? `<div class="meta">uptime: ${formatUptime(result.data.uptime_secs)}</div>`
+    : '';
+  const errorHtml = !isOk && result.error
+    ? `<div class="meta" style="color:var(--red);">${result.error}</div>`
+    : '';
+  const urlHtml = result.url
+    ? `<div class="meta">${result.url}</div>`
+    : '';
+
+  return `
+    <div class="card ${statusClass}">
+      <div class="card-header">
+        <h2>${svc.name}</h2>
+        <span class="badge ${statusClass}">${badgeText}</span>
+      </div>
+      <div class="counters">${countersHtml || '<div class="meta">No counters available</div>'}</div>
+      ${uptimeHtml}${errorHtml}${urlHtml}
+    </div>`;
+}
+
+async function refreshAll() {
+  const grid = document.getElementById('grid');
+  const banner = document.getElementById('error-banner');
+  const statusEl = document.getElementById('pipeline-status');
+  const refreshBar = document.getElementById('refresh-bar');
+
+  banner.style.display = 'none';
+
+  const results = await Promise.all(
+    SERVICES.map(async (svc) => {
+      const result = await fetchHealth(svc);
+      return { svc, result };
+    })
+  );
+
+  let html = '';
+  let okCount = 0;
+  let downCount = 0;
+  let totalReachable = 0;
+
+  for (const { svc, result } of results) {
+    html += renderCard(svc, result);
+    if (result.status !== 'unreachable') totalReachable++;
+    if (result.status === 'ok') okCount++;
+    if (result.status === 'down') downCount++;
+  }
+
+  grid.innerHTML = html;
+
+  // Pipeline status
+  let dotClass, statusText;
+  if (totalReachable === 0) {
+    dotClass = 'gray';
+    statusText = 'No services reachable';
+  } else if (downCount === 0) {
+    dotClass = 'green';
+    statusText = `All ${okCount} services healthy`;
+  } else if (okCount > 0) {
+    dotClass = 'yellow';
+    statusText = `Degraded: ${downCount} down, ${okCount} healthy`;
+  } else {
+    dotClass = 'red';
+    statusText = `Pipeline down: ${downCount} services unreachable`;
+  }
+
+  statusEl.innerHTML = `<span class="dot ${dotClass}"></span><span>${statusText}</span>`;
+  refreshBar.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+}
+
+// Initial load
+envSelect.value = 'local';
+baseUrlInput.disabled = true;
+refreshAll();
+intervalId = setInterval(refreshAll, parseInt(intervalSelect.value));
+</script>
+</body>
+</html>

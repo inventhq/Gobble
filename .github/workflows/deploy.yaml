@@ -10,61 +10,237 @@ env:
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
 
 jobs:
-  # ── Build all Docker images in parallel ────────────────────────────────────
-  build-core:
+  # ── Detect which files changed ────────────────────────────────────────────
+  changes:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
-    strategy:
-      matrix:
-        binary:
-          - tracker-core
-          - stats-consumer
-          - webhook-consumer
-          - sse-gateway
-          - risingwave-consumer
-          - r2-archiver
-          - event-filter
+    outputs:
+      # Shared Rust lib/deps — triggers ALL Rust binary rebuilds
+      rust-shared: ${{ steps.filter.outputs.rust-shared }}
+      # Per-binary source changes
+      tracker-core: ${{ steps.filter.outputs.tracker-core }}
+      sse-gateway: ${{ steps.filter.outputs.sse-gateway }}
+      webhook-consumer: ${{ steps.filter.outputs.webhook-consumer }}
+      risingwave-consumer: ${{ steps.filter.outputs.risingwave-consumer }}
+      r2-archiver: ${{ steps.filter.outputs.r2-archiver }}
+      event-filter: ${{ steps.filter.outputs.event-filter }}
+      # Python/Node services
+      polars-query: ${{ steps.filter.outputs.polars-query }}
+      polars-lite: ${{ steps.filter.outputs.polars-lite }}
+      ai-query: ${{ steps.filter.outputs.ai-query }}
+      # K8s manifests (deploy-only, no rebuild)
+      k8s: ${{ steps.filter.outputs.k8s }}
     steps:
       - uses: actions/checkout@v4
-
-      - uses: docker/login-action@v3
+      - uses: dorny/paths-filter@v3
+        id: filter
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          filters: |
+            rust-shared:
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'src/lib.rs'
+              - 'src/config.rs'
+              - 'src/crypto.rs'
+              - 'src/event.rs'
+              - 'src/health.rs'
+              - 'src/producer.rs'
+              - 'src/ingest_token_cache.rs'
+              - 'src/rate_limiter.rs'
+              - 'src/tenant_cache.rs'
+              - 'src/tracking_url_cache.rs'
+              - 'docker/Dockerfile.core'
+              - 'packages/aggregate-schema/**'
+            tracker-core:
+              - 'src/main.rs'
+              - 'src/routes.rs'
+            sse-gateway:
+              - 'src/bin/sse_gateway.rs'
+            webhook-consumer:
+              - 'src/bin/webhook_consumer.rs'
+            risingwave-consumer:
+              - 'src/bin/risingwave_consumer.rs'
+            r2-archiver:
+              - 'src/bin/r2_archiver.rs'
+            event-filter:
+              - 'src/bin/event_filter.rs'
+            polars-query:
+              - 'packages/polars-query/**'
+              - 'docker/Dockerfile.polars-query'
+            polars-lite:
+              - 'packages/polars-lite/**'
+              - 'docker/Dockerfile.polars-lite'
+            ai-query:
+              - 'packages/ai-query/**'
+              - 'docker/Dockerfile.ai-query'
+            k8s:
+              - 'k8s/**'
 
+  # ── Build Rust binaries (only when their source or shared deps change) ────
+  build-tracker-core:
+    needs: changes
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.rust-shared == 'true' ||
+      needs.changes.outputs.tracker-core == 'true'
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
       - uses: docker/setup-buildx-action@v3
-
       - uses: docker/build-push-action@v5
         with:
           context: .
           file: docker/Dockerfile.core
-          build-args: BINARY=${{ matrix.binary }}
+          build-args: BINARY=tracker-core
           push: true
           tags: |
-            ${{ env.IMAGE_PREFIX }}/${{ matrix.binary }}:latest
-            ${{ env.IMAGE_PREFIX }}/${{ matrix.binary }}:${{ github.sha }}
-          cache-from: type=gha,scope=${{ matrix.binary }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.binary }}
+            ${{ env.IMAGE_PREFIX }}/tracker-core:latest
+            ${{ env.IMAGE_PREFIX }}/tracker-core:${{ github.sha }}
+          cache-from: type=gha,scope=tracker-core
+          cache-to: type=gha,mode=max,scope=tracker-core
 
-  build-polars-query:
+  build-sse-gateway:
+    needs: changes
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.rust-shared == 'true' ||
+      needs.changes.outputs.sse-gateway == 'true'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+    permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
-
       - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
       - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.core
+          build-args: BINARY=sse-gateway
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/sse-gateway:latest
+            ${{ env.IMAGE_PREFIX }}/sse-gateway:${{ github.sha }}
+          cache-from: type=gha,scope=sse-gateway
+          cache-to: type=gha,mode=max,scope=sse-gateway
 
+  build-webhook-consumer:
+    needs: changes
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.rust-shared == 'true' ||
+      needs.changes.outputs.webhook-consumer == 'true'
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.core
+          build-args: BINARY=webhook-consumer
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/webhook-consumer:latest
+            ${{ env.IMAGE_PREFIX }}/webhook-consumer:${{ github.sha }}
+          cache-from: type=gha,scope=webhook-consumer
+          cache-to: type=gha,mode=max,scope=webhook-consumer
+
+  build-risingwave-consumer:
+    needs: changes
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.rust-shared == 'true' ||
+      needs.changes.outputs.risingwave-consumer == 'true'
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.core
+          build-args: BINARY=risingwave-consumer
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/risingwave-consumer:latest
+            ${{ env.IMAGE_PREFIX }}/risingwave-consumer:${{ github.sha }}
+          cache-from: type=gha,scope=risingwave-consumer
+          cache-to: type=gha,mode=max,scope=risingwave-consumer
+
+  build-r2-archiver:
+    needs: changes
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.rust-shared == 'true' ||
+      needs.changes.outputs.r2-archiver == 'true'
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.core
+          build-args: BINARY=r2-archiver
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/r2-archiver:latest
+            ${{ env.IMAGE_PREFIX }}/r2-archiver:${{ github.sha }}
+          cache-from: type=gha,scope=r2-archiver
+          cache-to: type=gha,mode=max,scope=r2-archiver
+
+  build-event-filter:
+    needs: changes
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.rust-shared == 'true' ||
+      needs.changes.outputs.event-filter == 'true'
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.core
+          build-args: BINARY=event-filter
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/event-filter:latest
+            ${{ env.IMAGE_PREFIX }}/event-filter:${{ github.sha }}
+          cache-from: type=gha,scope=event-filter
+          cache-to: type=gha,mode=max,scope=event-filter
+
+  # ── Build Python/Node services (only when changed) ────────────────────────
+  build-polars-query:
+    needs: changes
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.polars-query == 'true'
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
+      - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v5
         with:
           context: .
@@ -77,21 +253,17 @@ jobs:
           cache-to: type=gha,mode=max,scope=polars-query
 
   build-polars-lite:
+    needs: changes
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.polars-lite == 'true'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+    permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
-
       - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
       - uses: docker/setup-buildx-action@v3
-
       - uses: docker/build-push-action@v5
         with:
           context: .
@@ -104,21 +276,17 @@ jobs:
           cache-to: type=gha,mode=max,scope=polars-lite
 
   build-ai-query:
+    needs: changes
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.ai-query == 'true'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+    permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
-
       - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
       - uses: docker/setup-buildx-action@v3
-
       - uses: docker/build-push-action@v5
         with:
           context: .
@@ -131,13 +299,23 @@ jobs:
           cache-to: type=gha,mode=max,scope=ai-query
 
   # ── Deploy to Civo K3s ────────────────────────────────────────────────────
+  # Runs when ANY build completes or K8s manifests change.
+  # Skipped builds keep their previous :latest tag — only rebuilt images get pinned to :sha.
   deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: read
+    # Run unless a build FAILED (skipped builds are fine)
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
     needs:
-      - build-core
+      - changes
+      - build-tracker-core
+      - build-sse-gateway
+      - build-webhook-consumer
+      - build-risingwave-consumer
+      - build-r2-archiver
+      - build-event-filter
       - build-polars-query
       - build-polars-lite
       - build-ai-query
@@ -176,11 +354,39 @@ jobs:
             --from-literal=LANCEDB_API_KEY="${{ secrets.LANCEDB_API_KEY }}" \
             --from-literal=SLM_API_KEY="${{ secrets.SLM_API_KEY }}"
 
-      - name: Update image tags in manifests
+      - name: Pin image tags for rebuilt services only
+        env:
+          SHA: ${{ github.sha }}
+          # Job results: 'success' if built, 'skipped' if path filter didn't match
+          R_TRACKER_CORE: ${{ needs.build-tracker-core.result }}
+          R_SSE_GATEWAY: ${{ needs.build-sse-gateway.result }}
+          R_WEBHOOK: ${{ needs.build-webhook-consumer.result }}
+          R_RISINGWAVE: ${{ needs.build-risingwave-consumer.result }}
+          R_R2: ${{ needs.build-r2-archiver.result }}
+          R_FILTER: ${{ needs.build-event-filter.result }}
+          R_POLARS_Q: ${{ needs.build-polars-query.result }}
+          R_POLARS_L: ${{ needs.build-polars-lite.result }}
+          R_AI: ${{ needs.build-ai-query.result }}
         run: |
           cd k8s
-          # Pin only our ghcr.io images to current commit SHA (leave iggyrs/iggy:latest alone)
-          sed -i "s|ghcr.io/inventhq/\([^:]*\):latest|ghcr.io/inventhq/\1:${{ github.sha }}|g" *.yaml
+          pin() {
+            local svc=$1 result=$2
+            if [ "$result" = "success" ]; then
+              echo "  → pinning $svc to :$SHA"
+              sed -i "s|ghcr.io/inventhq/${svc}:latest|ghcr.io/inventhq/${svc}:${SHA}|g" *.yaml
+            else
+              echo "  → $svc skipped (keeping :latest)"
+            fi
+          }
+          pin "tracker-core"         "$R_TRACKER_CORE"
+          pin "sse-gateway"          "$R_SSE_GATEWAY"
+          pin "webhook-consumer"     "$R_WEBHOOK"
+          pin "risingwave-consumer"  "$R_RISINGWAVE"
+          pin "r2-archiver"          "$R_R2"
+          pin "event-filter"         "$R_FILTER"
+          pin "polars-query"         "$R_POLARS_Q"
+          pin "polars-lite"          "$R_POLARS_L"
+          pin "ai-query"             "$R_AI"
 
       - name: Apply manifests
         run: |
@@ -193,7 +399,6 @@ jobs:
           kubectl -n tracker rollout status deployment/tracker-core --timeout=300s
           kubectl -n tracker rollout status deployment/sse-gateway --timeout=300s
           kubectl -n tracker rollout status deployment/event-filter --timeout=300s
-          kubectl -n tracker rollout status deployment/stats-consumer --timeout=300s
           kubectl -n tracker rollout status deployment/webhook-consumer --timeout=300s
           kubectl -n tracker rollout status deployment/risingwave-consumer --timeout=300s
           kubectl -n tracker rollout status deployment/r2-archiver --timeout=300s
@@ -204,7 +409,6 @@ jobs:
 
       - name: Verify health
         run: |
-          # Give services a moment to stabilize
           sleep 10
           kubectl -n tracker get pods
           kubectl -n tracker get svc

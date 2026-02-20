@@ -1,10 +1,8 @@
-# Multi-stage build for tracker-core binaries.
-# Builds all 7 binaries from the root Cargo.toml in one builder stage,
-# then copies only the selected binary into a minimal runtime image.
+# Multi-stage build for tracker-core Rust binaries.
+# Builds ONLY the selected binary — not all of them.
 #
 # Usage:
 #   docker build -f docker/Dockerfile.core --build-arg BINARY=tracker-core -t tracker-core .
-#   docker build -f docker/Dockerfile.core --build-arg BINARY=stats-consumer -t stats-consumer .
 #   docker build -f docker/Dockerfile.core --build-arg BINARY=webhook-consumer -t webhook-consumer .
 #   docker build -f docker/Dockerfile.core --build-arg BINARY=sse-gateway -t sse-gateway .
 #   docker build -f docker/Dockerfile.core --build-arg BINARY=risingwave-consumer -t risingwave-consumer .
@@ -15,6 +13,8 @@ ARG BINARY=tracker-core
 
 # ── Builder ──────────────────────────────────────────────────────────────────
 FROM rust:latest AS builder
+
+ARG BINARY
 
 WORKDIR /build
 
@@ -38,12 +38,12 @@ RUN mkdir -p src/bin && \
     echo "fn main() {}" > src/bin/r2_archiver.rs && \
     echo "fn main() {}" > src/bin/event_filter.rs
 
-# Build deps only (cached unless Cargo.toml/Cargo.lock change)
-RUN cargo build --release 2>/dev/null || true
+# Build deps only for the target binary (cached unless Cargo.toml/Cargo.lock change)
+RUN cargo build --release --bin ${BINARY} 2>/dev/null || true
 
-# Copy real source and rebuild
+# Copy real source and rebuild only the target binary
 COPY src/ src/
-RUN touch src/main.rs src/lib.rs src/bin/*.rs && cargo build --release
+RUN touch src/main.rs src/lib.rs src/bin/*.rs && cargo build --release --bin ${BINARY}
 
 # ── Runtime ──────────────────────────────────────────────────────────────────
 FROM debian:trixie-slim

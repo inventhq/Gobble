@@ -25,6 +25,7 @@ use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
 use tracker_core::event::TrackingEvent;
+use tracker_core::health::{HealthCounters, spawn_health_server};
 
 /// Maximum number of event IDs to remember for deduplication.
 const DEDUP_CAPACITY: usize = 100_000;
@@ -384,7 +385,7 @@ async fn main() {
     let iggy_url = env::var("IGGY_URL").unwrap_or_else(|_| "127.0.0.1:8090".into());
     let iggy_http_url = env::var("IGGY_HTTP_URL").unwrap_or_else(|_| "http://127.0.0.1:3000".into());
     let iggy_stream = env::var("IGGY_STREAM").unwrap_or_else(|_| "tracker".into());
-    let iggy_topic = env::var("IGGY_TOPIC").unwrap_or_else(|_| "events".into());
+    let iggy_topic = env::var("IGGY_TOPIC_CLEAN").unwrap_or_else(|_| "events-clean".into());
     let rw_url = match env::var("RISINGWAVE_URL") {
         Ok(u) if !u.is_empty() && u != "CHANGE_ME" => u,
         _ => {
@@ -495,6 +496,13 @@ async fn main() {
     // Direct poll_messages() with PollingStrategy::offset() — no SDK internal
     // state, no Stream cancellation issues, full control over offset tracking.
 
+    // --- Health server ---
+    let health_port: u16 = env::var("HEALTH_PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(3041);
+    let health = HealthCounters::new("risingwave-consumer", &[
+        "events_read", "events_written", "deduped", "flushes", "flush_errors",
+    ]);
+    spawn_health_server(health.clone(), health_port);
+
     let batch_size = config.batch_size;
     let poll_count: u32 = 1000; // messages per server poll
 
@@ -562,6 +570,7 @@ async fn main() {
                 };
 
                 events_read += 1;
+                health.set("events_read", events_read);
                 next_offset.insert(pid, msg_offset + 1);
 
                 // Track max offset for commit
@@ -570,6 +579,7 @@ async fn main() {
 
                 if seen_ids.contains(&event.event_id) {
                     deduped += 1;
+                    health.set("deduped", deduped);
                     continue;
                 }
 

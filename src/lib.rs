@@ -10,6 +10,7 @@
 pub mod config;
 pub mod crypto;
 pub mod event;
+pub mod health;
 pub mod ingest_token_cache;
 pub mod producer;
 pub mod rate_limiter;

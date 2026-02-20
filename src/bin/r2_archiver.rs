@@ -40,6 +40,7 @@ use tracing_subscriber::EnvFilter;
 use url::Url;
 
 use tracker_core::event::TrackingEvent;
+use tracker_core::health::{HealthCounters, spawn_health_server};
 
 /// Maximum number of event IDs to remember for deduplication.
 const DEDUP_CAPACITY: usize = 100_000;
@@ -74,7 +75,7 @@ impl ArchiverConfig {
             iggy_url: env::var("IGGY_URL").unwrap_or_else(|_| "127.0.0.1:8090".into()),
             iggy_http_url: env::var("IGGY_HTTP_URL").unwrap_or_else(|_| "http://127.0.0.1:3000".into()),
             iggy_stream: env::var("IGGY_STREAM").unwrap_or_else(|_| "tracker".into()),
-            iggy_topic: env::var("IGGY_TOPIC").unwrap_or_else(|_| "events".into()),
+            iggy_topic: env::var("IGGY_TOPIC_CLEAN").unwrap_or_else(|_| "events-clean".into()),
             r2_endpoint: env::var("R2_ENDPOINT").expect("R2_ENDPOINT is required"),
             r2_access_key_id: env::var("R2_ACCESS_KEY_ID").expect("R2_ACCESS_KEY_ID is required"),
             r2_secret_access_key: env::var("R2_SECRET_ACCESS_KEY")
@@ -732,6 +733,13 @@ async fn main() {
     }
 
     let config = ArchiverConfig::from_env();
+
+    // --- Health server ---
+    let health_port: u16 = env::var("HEALTH_PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(3042);
+    let health = HealthCounters::new("r2-archiver", &[
+        "events_read", "events_archived", "deduped", "flushes", "flush_errors", "compactions",
+    ]);
+    spawn_health_server(health.clone(), health_port);
 
     info!(
         "Iggy: {}  Stream: {}  Topic: {}",

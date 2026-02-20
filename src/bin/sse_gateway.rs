@@ -681,7 +681,7 @@ async fn debug_write_handler() -> Json<serde_json::Value> {
         iggy_http_url, stream, topic_clean
     );
     let body = json!({
-        "partitioning": { "kind": "balanced" },
+        "partitioning": { "kind": "balanced", "value": 0 },
         "messages": [{ "payload": payload_b64 }]
     });
 

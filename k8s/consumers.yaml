@@ -1,44 +1,6 @@
 # Consumer deployments — all read from Iggy events-clean topic.
 # Each consumer type runs as a separate Deployment for independent scaling.
 
-# ── stats-consumer ───────────────────────────────────────────────────────────
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: stats-consumer
-  namespace: tracker
-  labels:
-    app: stats-consumer
-    tier: hot
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: stats-consumer
-  template:
-    metadata:
-      labels:
-        app: stats-consumer
-        tier: hot
-    spec:
-      imagePullSecrets:
-        - name: ghcr-pull-secret
-      containers:
-        - name: stats-consumer
-          image: ghcr.io/inventhq/stats-consumer:latest
-          envFrom:
-            - configMapRef:
-                name: tracker-config
-            - secretRef:
-                name: tracker-secrets
-          resources:
-            requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: 500m
-              memory: 256Mi
----
 # ── webhook-consumer ─────────────────────────────────────────────────────────
 apiVersion: apps/v1
 kind: Deployment

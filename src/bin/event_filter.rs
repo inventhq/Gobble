@@ -27,6 +27,7 @@ use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
 use tracker_core::event::TrackingEvent;
+use tracker_core::health::{HealthCounters, spawn_health_server};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -802,6 +803,13 @@ async fn main() {
         }
     });
 
+    // --- Health server ---
+    let health_port: u16 = env::var("HEALTH_PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(3043);
+    let health = HealthCounters::new("event-filter", &[
+        "events_passed", "events_dropped", "poll_errors",
+    ]);
+    spawn_health_server(health.clone(), health_port);
+
     // --- Task 2: Filter + produce to clean topic ---
     let events_passed = Arc::new(AtomicU64::new(0));
     let events_dropped = Arc::new(AtomicU64::new(0));
@@ -857,10 +865,12 @@ async fn main() {
                 match result {
                     FilterResult::Pass => {
                         events_passed.fetch_add(1, Ordering::Relaxed);
+                        health.set("events_passed", events_passed.load(Ordering::Relaxed));
                         pass_batch.push(ewo);
                     }
                     FilterResult::Drop(reason) => {
                         events_dropped.fetch_add(1, Ordering::Relaxed);
+                        health.set("events_dropped", events_dropped.load(Ordering::Relaxed));
                         *drop_reasons.entry(reason).or_insert(0) += 1;
                         // Event is dropped — offset tracked above, event discarded
                     }

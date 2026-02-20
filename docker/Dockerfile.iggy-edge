@@ -5,8 +5,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
 
 WORKDIR /iggy
 
-RUN curl -fsSL https://github.com/apache/iggy/releases/download/edge/iggy-x86_64-unknown-linux-musl-edge.tar.gz \
-    | tar xz && chmod +x /iggy/iggy-server
+# Pinned Iggy server binary — matches SDK =0.8.3-edge.1 in Cargo.toml.
+# To upgrade: download new tarball, update SHA256, test locally first.
+RUN IGGY_SHA256="e673778119e6d79e61312751ff91df67c6d9ff93bacb7020bc44cbca4cb89cd6" && \
+    curl -fsSL https://github.com/apache/iggy/releases/download/edge/iggy-x86_64-unknown-linux-musl-edge.tar.gz \
+      -o /tmp/iggy.tar.gz && \
+    echo "${IGGY_SHA256}  /tmp/iggy.tar.gz" | sha256sum -c - && \
+    tar xz -C /iggy -f /tmp/iggy.tar.gz && chmod +x /iggy/iggy-server && \
+    rm /tmp/iggy.tar.gz
 
 EXPOSE 8090 3000
 
