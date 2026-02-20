@@ -156,25 +156,51 @@ async fn iggy_consumer_loop(
     events_counter: &AtomicU64,
     error_counter: &AtomicU64,
 ) {
-    // TCP client for offset management only
+    // TCP client for offset management — retry until connected
     let resolved_iggy = tracker_core::producer::resolve_server_addr(&iggy_url).await;
-    let client = IggyClientBuilder::new()
-        .with_tcp()
-        .with_server_address(resolved_iggy.clone())
-        .with_auto_sign_in(AutoLogin::Enabled(iggy_common::Credentials::UsernamePassword(
-            DEFAULT_ROOT_USERNAME.to_string(),
-            DEFAULT_ROOT_PASSWORD.to_string(),
-        )))
-        .build()
-        .expect("Failed to build Iggy client");
+    let client = loop {
+        let c = IggyClientBuilder::new()
+            .with_tcp()
+            .with_server_address(resolved_iggy.clone())
+            .with_auto_sign_in(AutoLogin::Enabled(iggy_common::Credentials::UsernamePassword(
+                DEFAULT_ROOT_USERNAME.to_string(),
+                DEFAULT_ROOT_PASSWORD.to_string(),
+            )))
+            .build();
+        let c = match c {
+            Ok(c) => c,
+            Err(e) => {
+                warn!("[{}] Failed to build Iggy client: {} — retrying in 5s", consumer_name, e);
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                continue;
+            }
+        };
+        match c.connect().await {
+            Ok(_) => {
+                info!("[{}] TCP connected to Iggy at {}", consumer_name, iggy_url);
+                break c;
+            }
+            Err(e) => {
+                warn!("[{}] Failed to connect to Iggy TCP: {} — retrying in 5s", consumer_name, e);
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+        }
+    };
 
-    client.connect().await.expect("Failed to connect to Iggy");
-
-    // HTTP client for polling (avoids Iggy server-side delivered-offset tracking bug)
+    // HTTP client for polling — retry login until successful
     let http = reqwest::Client::new();
-    let mut iggy_token = iggy_http_login(&http, &iggy_http_url)
-        .await
-        .expect("Failed to login to Iggy HTTP API");
+    let mut iggy_token = loop {
+        match iggy_http_login(&http, &iggy_http_url).await {
+            Ok(t) => {
+                info!("[{}] HTTP logged in to Iggy at {}", consumer_name, iggy_http_url);
+                break t;
+            }
+            Err(e) => {
+                warn!("[{}] Failed to login to Iggy HTTP: {} — retrying in 5s", consumer_name, e);
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+        }
+    };
     info!("[{}] Connected to Iggy TCP={} HTTP={}", consumer_name, iggy_url, iggy_http_url);
 
     let consumer_id = Consumer::new(Identifier::named(consumer_name).unwrap());
