@@ -140,6 +140,11 @@ pub async fn handle_health(State(state): State<AppState>) -> Response {
         "iggy_connected": state.producer.is_connected().await,
         "events_sent": state.producer.events_sent(),
         "events_dropped": state.producer.events_dropped(),
+        "clean_producer": {
+            "iggy_connected": state.clean_producer.is_connected().await,
+            "events_sent": state.clean_producer.events_sent(),
+            "events_dropped": state.clean_producer.events_dropped(),
+        },
     });
     (StatusCode::OK, [("content-type", "application/json")], body.to_string()).into_response()
 }
