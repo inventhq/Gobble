@@ -124,6 +124,7 @@ async fn main() {
         .route("/sse/events", get(sse_handler))
         .route("/health", get(health_handler))
         .route("/debug/iggy", get(debug_iggy_handler))
+        .route("/debug/write", get(debug_write_handler))
         .layer(cors)
         .with_state(state);
 
@@ -647,6 +648,81 @@ async fn debug_iggy_handler() -> Json<serde_json::Value> {
             "info": clean_info,
             "partitions_with_data": clean_data,
         },
+    }))
+}
+
+/// Debug endpoint — write a test message directly to Iggy via HTTP API.
+/// Bypasses the SDK entirely to isolate write-path issues.
+async fn debug_write_handler() -> Json<serde_json::Value> {
+    let iggy_http_url = env::var("IGGY_HTTP_URL").unwrap_or_else(|_| "http://127.0.0.1:3000".into());
+    let stream = env::var("IGGY_STREAM").unwrap_or_else(|_| "tracker".into());
+    let topic_clean = env::var("IGGY_TOPIC_CLEAN").unwrap_or_else(|_| "events-clean".into());
+
+    let http = reqwest::Client::new();
+
+    let token = match iggy_http_login(&http, &iggy_http_url).await {
+        Ok(t) => t,
+        Err(e) => return Json(json!({ "error": format!("login failed: {}", e) })),
+    };
+
+    // Build a minimal test event JSON
+    let test_event = json!({
+        "event_id": format!("debug-write-{}", chrono::Utc::now().timestamp()),
+        "event_type": "debug_write_test",
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "params": { "src": "sse-gateway-debug" }
+    });
+    let payload_bytes = serde_json::to_vec(&test_event).unwrap();
+    let payload_b64 = base64::engine::general_purpose::STANDARD.encode(&payload_bytes);
+
+    // Send via Iggy HTTP API: POST /streams/{stream}/topics/{topic}/messages
+    let url = format!(
+        "{}/streams/{}/topics/{}/messages",
+        iggy_http_url, stream, topic_clean
+    );
+    let body = json!({
+        "partitioning": { "kind": "balanced" },
+        "messages": [{ "payload": payload_b64 }]
+    });
+
+    let resp = http.post(&url)
+        .header("Authorization", format!("Bearer {}", token))
+        .json(&body)
+        .send()
+        .await;
+
+    let write_result = match resp {
+        Ok(r) => {
+            let status = r.status().as_u16();
+            let text = r.text().await.unwrap_or_default();
+            json!({ "status": status, "response": text })
+        }
+        Err(e) => json!({ "error": format!("{}", e) }),
+    };
+
+    // Now read back from partition 0 to verify
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    let read_url = format!(
+        "{}/streams/{}/topics/{}/messages?consumer_id=debug-write&partition_id=0&polling_strategy=last&value=0&count=5",
+        iggy_http_url, stream, topic_clean
+    );
+    let read_result = match http.get(&read_url)
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await
+    {
+        Ok(r) => {
+            let text = r.text().await.unwrap_or_default();
+            serde_json::from_str::<serde_json::Value>(&text).unwrap_or(json!(text))
+        }
+        Err(e) => json!({ "error": format!("{}", e) }),
+    };
+
+    Json(json!({
+        "test_event": test_event,
+        "write": write_result,
+        "read_back": read_result,
     }))
 }
 
