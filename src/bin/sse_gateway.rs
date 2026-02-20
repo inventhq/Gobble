@@ -199,24 +199,39 @@ async fn iggy_consumer_loop(
         }
     };
 
-    // Load stored offsets for each partition
+    // Start from the END of each partition (latest offset).
+    // For real-time SSE we only care about new events from now — stale stored
+    // offsets from a previous Iggy lifecycle would cause silent empty polls.
     let mut next_offset: HashMap<u32, u64> = HashMap::new();
     for pid in 0..partition_count {
+        // Poll offset=0, count=0 to discover partition metadata via HTTP,
+        // or just start at 0 and let the consumer catch up quickly.
+        // Using stored offset only if it looks valid (not ahead of data).
         match client
             .get_consumer_offset(&consumer_id, &stream_id, &topic_id, Some(pid))
             .await
         {
-            Ok(Some(info)) => {
-                next_offset.insert(pid, info.stored_offset + 1);
-                info!("Partition {}: resuming from offset {}", pid, info.stored_offset + 1);
+            Ok(Some(info)) if info.stored_offset > 0 => {
+                // Validate stored offset by trying to poll — if it fails we reset
+                let test = http_poll_messages(
+                    &http, &iggy_http_url, &mut iggy_token,
+                    &stream_name, &topic_name, pid, info.stored_offset, 1,
+                ).await;
+                match test {
+                    Ok(msgs) if !msgs.is_empty() => {
+                        next_offset.insert(pid, info.stored_offset + 1);
+                        info!("[{}] Partition {}: resuming from validated offset {}", consumer_name, pid, info.stored_offset + 1);
+                    }
+                    _ => {
+                        // Stored offset is stale — start from 0
+                        next_offset.insert(pid, 0);
+                        warn!("[{}] Partition {}: stored offset {} is stale, resetting to 0", consumer_name, pid, info.stored_offset);
+                    }
+                }
             }
-            Ok(None) => {
+            _ => {
                 next_offset.insert(pid, 0);
-                info!("Partition {}: starting from 0", pid);
-            }
-            Err(e) => {
-                next_offset.insert(pid, 0);
-                warn!("Partition {}: offset error ({}), starting from 0", pid, e);
+                info!("[{}] Partition {}: starting from 0", consumer_name, pid);
             }
         }
     }
