@@ -61,23 +61,33 @@ async fn main() {
     let iggy_http_url = env::var("IGGY_HTTP_URL").unwrap_or_else(|_| "http://127.0.0.1:3000".into());
     let iggy_stream = env::var("IGGY_STREAM").unwrap_or_else(|_| "tracker".into());
     let iggy_topic = env::var("IGGY_TOPIC").unwrap_or_else(|_| "events".into());
+    let iggy_topic_clean = env::var("IGGY_TOPIC_CLEAN").unwrap_or_else(|_| "events-clean".into());
     let port: u16 = env::var("SSE_PORT")
         .unwrap_or_else(|_| "3031".into())
         .parse()
         .expect("SSE_PORT must be a valid port number");
 
-    info!("Iggy: {} HTTP: {}  Stream: {}  Topic: {}", iggy_url, iggy_http_url, iggy_stream, iggy_topic);
+    info!("Iggy: {} HTTP: {}  Stream: {}  Topics: {}, {}", iggy_url, iggy_http_url, iggy_stream, iggy_topic, iggy_topic_clean);
 
     // --- Broadcast channel for fan-out ---
     let (tx, _) = broadcast::channel::<Arc<TrackingEvent>>(BROADCAST_CAPACITY);
 
     let state = AppState { tx: tx.clone() };
 
-    // --- Spawn Iggy consumer task ---
+    // --- Spawn Iggy consumer task for raw events topic ---
     let iggy_url_clone = iggy_url.clone();
     let iggy_http_url_clone = iggy_http_url.clone();
+    let iggy_stream_clone = iggy_stream.clone();
+    let tx_clone = tx.clone();
     tokio::spawn(async move {
-        iggy_consumer_loop(iggy_url_clone, iggy_http_url_clone, iggy_stream, iggy_topic, tx).await;
+        iggy_consumer_loop(iggy_url_clone, iggy_http_url_clone, iggy_stream_clone, iggy_topic, tx_clone, "sse-gateway").await;
+    });
+
+    // --- Spawn Iggy consumer task for clean/ingest events topic ---
+    let iggy_url_clone2 = iggy_url.clone();
+    let iggy_http_url_clone2 = iggy_http_url.clone();
+    tokio::spawn(async move {
+        iggy_consumer_loop(iggy_url_clone2, iggy_http_url_clone2, iggy_stream, iggy_topic_clean, tx, "sse-gateway-clean").await;
     });
 
     // --- Axum HTTP server with CORS ---
@@ -119,6 +129,7 @@ async fn iggy_consumer_loop(
     stream_name: String,
     topic_name: String,
     tx: broadcast::Sender<Arc<TrackingEvent>>,
+    consumer_name: &str,
 ) {
     // TCP client for offset management only
     let resolved_iggy = tracker_core::producer::resolve_server_addr(&iggy_url).await;
@@ -139,9 +150,9 @@ async fn iggy_consumer_loop(
     let mut iggy_token = iggy_http_login(&http, &iggy_http_url)
         .await
         .expect("Failed to login to Iggy HTTP API");
-    info!("Connected to Iggy TCP={} HTTP={}", iggy_url, iggy_http_url);
+    info!("[{}] Connected to Iggy TCP={} HTTP={}", consumer_name, iggy_url, iggy_http_url);
 
-    let consumer_id = Consumer::new(Identifier::named("sse-gateway").unwrap());
+    let consumer_id = Consumer::new(Identifier::named(consumer_name).unwrap());
     let stream_id = Identifier::named(&stream_name).unwrap();
     let topic_id = Identifier::named(&topic_name).unwrap();
 
