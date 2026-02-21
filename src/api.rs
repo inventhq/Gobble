@@ -101,7 +101,7 @@ struct EventsParams {
 }
 
 /// `GET /api/v1/events` — list recent events for the tenant.
-async fn list_events(
+pub async fn list_events(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(params): Query<EventsParams>,
@@ -125,8 +125,8 @@ async fn list_events(
     proxy_to_polars_query(&state, &body).await
 }
 
-/// `GET /api/v1/events/:event_id` — fetch a single event by ID.
-async fn get_event(
+/// `GET /api/v1/events/id/:event_id` — fetch a single event by ID.
+pub async fn get_event(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(event_id): Path<String>,
@@ -161,7 +161,7 @@ struct CustomQueryRequest {
 }
 
 /// `POST /api/v1/events/query` — custom SQL over raw events.
-async fn custom_query(
+pub async fn custom_query(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(req): Json<CustomQueryRequest>,
@@ -212,7 +212,7 @@ struct AnalyticsParams {
 }
 
 /// `GET /api/v1/analytics/summary` — total event counts by type.
-async fn analytics_summary(
+pub async fn analytics_summary(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(params): Query<AnalyticsParams>,
@@ -245,7 +245,7 @@ struct TimeseriesParams {
 }
 
 /// `GET /api/v1/analytics/timeseries` — time-bucketed event volumes.
-async fn analytics_timeseries(
+pub async fn analytics_timeseries(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(params): Query<TimeseriesParams>,
@@ -273,7 +273,7 @@ async fn analytics_timeseries(
 }
 
 /// `GET /api/v1/analytics/top` — top event types or dimensions.
-async fn analytics_top(
+pub async fn analytics_top(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(params): Query<AnalyticsParams>,
@@ -321,7 +321,7 @@ struct NlQueryRequest {
 }
 
 /// `POST /api/v1/query/nl` — natural language → SQL → results.
-async fn query_nl(
+pub async fn query_nl(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(req): Json<NlQueryRequest>,
@@ -361,7 +361,7 @@ struct SimilarQueryRequest {
 }
 
 /// `POST /api/v1/query/similar` — vector similarity search.
-async fn query_similar(
+pub async fn query_similar(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(req): Json<SimilarQueryRequest>,
@@ -414,7 +414,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         // Events (cold tier — polars-query)
         .route("/events", get(list_events))
-        .route("/events/{event_id}", get(get_event))
+        .route("/events/id/{event_id}", get(get_event))
         .route("/events/query", post(custom_query))
         // Analytics (warm tier — polars-lite)
         .route("/analytics/summary", get(analytics_summary))
