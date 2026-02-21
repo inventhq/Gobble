@@ -7,6 +7,7 @@
 //! - [`producer`] — High-throughput Iggy producer with background send mode.
 //! - [`routes`] — Axum HTTP endpoint handlers.
 
+pub mod api;
 pub mod config;
 pub mod crypto;
 pub mod event;

@@ -55,6 +55,8 @@ pub struct AppState {
     pub ingest_token_cache: IngestTokenCache,
     /// Per-tenant token bucket rate limiter.
     pub rate_limiter: RateLimiter,
+    /// Shared HTTP client for proxying API requests to internal services.
+    pub http_client: reqwest::Client,
 }
 
 /// Append `ad_click_id` to a destination URL so the beacon script can stitch
@@ -125,7 +127,15 @@ pub async fn handle_root() -> Response {
             "GET /i": "Impression tracking (1x1 GIF)",
             "POST /batch": "Bulk event ingestion (JSON array)",
             "POST /t/auto": "Browser beacon (sendBeacon, cookieless auto-tracking)",
-            "POST /ingest": "External event ingestion (Bearer token auth)"
+            "POST /ingest": "External event ingestion (Bearer token auth)",
+            "GET /api/v1/events": "List events (Bearer pt_ token auth)",
+            "GET /api/v1/events/:id": "Get event by ID",
+            "POST /api/v1/events/query": "Custom SQL query over raw events",
+            "GET /api/v1/analytics/summary": "Event counts by type (warm tier)",
+            "GET /api/v1/analytics/timeseries": "Time-bucketed event volumes",
+            "GET /api/v1/analytics/top": "Top event types / dimensions",
+            "POST /api/v1/query/nl": "Natural language → SQL → results",
+            "POST /api/v1/query/similar": "Vector similarity search"
         },
         "docs": "https://github.com/inventhq/tracker"
     });

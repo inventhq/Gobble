@@ -116,6 +116,11 @@ async fn main() {
     producer.start_reconnect_task();
     clean_producer.start_reconnect_task();
 
+    let http_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .expect("Failed to build HTTP client");
+
     let state = AppState {
         config: config.clone(),
         producer,
@@ -124,6 +129,7 @@ async fn main() {
         tracking_url_cache,
         ingest_token_cache,
         rate_limiter,
+        http_client,
     };
 
     let app = Router::new()
@@ -139,6 +145,7 @@ async fn main() {
             .layer(DefaultBodyLimit::max(16_384)))
         .route("/ingest", post(routes::handle_ingest)
             .layer(DefaultBodyLimit::max(1_048_576)))
+        .nest("/api/v1", tracker_core::api::router())
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(config.listen_addr)

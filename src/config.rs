@@ -49,6 +49,12 @@ pub struct Config {
     pub platform_api_url: Option<String>,
     /// Platform API admin key for authenticating secret fetches.
     pub platform_api_key: Option<String>,
+    /// Internal URL for polars-query service (cold tier, Delta Lake).
+    pub polars_query_url: String,
+    /// Internal URL for polars-lite service (warm tier, aggregates).
+    pub polars_lite_url: String,
+    /// Internal URL for ai-query service (NL query, vector search).
+    pub ai_query_url: String,
 }
 
 impl Config {
@@ -112,6 +118,13 @@ impl Config {
         let platform_api_url = env::var("PLATFORM_API_URL").ok();
         let platform_api_key = env::var("PLATFORM_API_KEY").ok();
 
+        let polars_query_url = env::var("POLARS_QUERY_URL")
+            .unwrap_or_else(|_| "http://polars-query:3040".into());
+        let polars_lite_url = env::var("POLARS_LITE_URL")
+            .unwrap_or_else(|_| "http://polars-lite:3041".into());
+        let ai_query_url = env::var("AI_QUERY_URL")
+            .unwrap_or_else(|_| "http://ai-query:3060".into());
+
         Ok(Config {
             url_mode,
             hmac_secret,
@@ -125,6 +138,9 @@ impl Config {
             max_batch_size,
             platform_api_url,
             platform_api_key,
+            polars_query_url,
+            polars_lite_url,
+            ai_query_url,
         })
     }
 }

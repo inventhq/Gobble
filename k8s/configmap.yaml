@@ -21,6 +21,9 @@ data:
   PLUGIN_RUNTIME_URL: "http://plugin-runtime.tracker.svc.cluster.local:3050"
   INGEST_URL: "https://track.juicyapi.com/ingest"
   SSE_GATEWAY_URL: "https://sse.juicyapi.com"
+  POLARS_QUERY_URL: "http://polars-query:3040"
+  POLARS_LITE_URL: "http://polars-lite:3041"
+  AI_QUERY_URL: "http://ai-query:3060"
 
   # R2
   R2_BUCKET: "tracker-events"
