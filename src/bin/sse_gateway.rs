@@ -475,7 +475,9 @@ async fn sse_handler(
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let mut rx = state.tx.subscribe();
     let key_prefix = query.key_prefix;
-    let event_type = query.event_type;
+    let event_types: Option<Vec<String>> = query.event_type.map(|et| {
+        et.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+    });
     let tu_id = query.tu_id;
 
     let stream = async_stream::stream! {
@@ -490,9 +492,9 @@ async fn sse_handler(
                         }
                     }
 
-                    // Filter by event_type if specified
-                    if let Some(ref etype) = event_type {
-                        if event.event_type != *etype {
+                    // Filter by event_type if specified (supports comma-separated list)
+                    if let Some(ref etypes) = event_types {
+                        if !etypes.is_empty() && !etypes.iter().any(|t| t == &event.event_type) {
                             continue;
                         }
                     }
