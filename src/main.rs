@@ -145,7 +145,15 @@ async fn main() {
             .layer(DefaultBodyLimit::max(16_384)))
         .route("/ingest", post(routes::handle_ingest)
             .layer(DefaultBodyLimit::max(1_048_576)))
-        .nest("/api/v1", tracker_core::api::router())
+        // Tenant-scoped analytics API
+        .route("/api/v1/events", get(tracker_core::api::list_events))
+        .route("/api/v1/events/id/{event_id}", get(tracker_core::api::get_event))
+        .route("/api/v1/events/query", post(tracker_core::api::custom_query))
+        .route("/api/v1/analytics/summary", get(tracker_core::api::analytics_summary))
+        .route("/api/v1/analytics/timeseries", get(tracker_core::api::analytics_timeseries))
+        .route("/api/v1/analytics/top", get(tracker_core::api::analytics_top))
+        .route("/api/v1/query/nl", post(tracker_core::api::query_nl))
+        .route("/api/v1/query/similar", post(tracker_core::api::query_similar))
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(config.listen_addr)

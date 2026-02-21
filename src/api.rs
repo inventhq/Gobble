@@ -93,7 +93,7 @@ fn api_err(status: StatusCode, msg: impl Into<String>) -> Response {
 
 /// Query parameters for `GET /api/v1/events`.
 #[derive(Debug, Deserialize)]
-struct EventsParams {
+pub struct EventsParams {
     event_type: Option<String>,
     from: Option<String>,
     to: Option<String>,
@@ -152,7 +152,7 @@ pub async fn get_event(
 
 /// Request body for `POST /api/v1/events/query`.
 #[derive(Debug, Deserialize)]
-struct CustomQueryRequest {
+pub struct CustomQueryRequest {
     /// SQL SELECT statement — runs against `deduped` CTE (auto-scoped to tenant).
     sql: String,
     from: Option<String>,
@@ -204,7 +204,7 @@ async fn proxy_to_polars_query(state: &AppState, body: &serde_json::Value) -> Re
 
 /// Query parameters for analytics endpoints.
 #[derive(Debug, Deserialize)]
-struct AnalyticsParams {
+pub struct AnalyticsParams {
     event_type: Option<String>,
     from: Option<String>,
     to: Option<String>,
@@ -235,7 +235,7 @@ pub async fn analytics_summary(
 
 /// Query parameters for timeseries endpoint.
 #[derive(Debug, Deserialize)]
-struct TimeseriesParams {
+pub struct TimeseriesParams {
     event_type: Option<String>,
     from: Option<String>,
     to: Option<String>,
@@ -314,10 +314,10 @@ async fn proxy_to_polars_lite(state: &AppState, body: &serde_json::Value) -> Res
 
 /// Request body for `POST /api/v1/query/nl`.
 #[derive(Debug, Deserialize)]
-struct NlQueryRequest {
+pub struct NlQueryRequest {
     /// Natural language question.
-    prompt: String,
-    limit: Option<u32>,
+    pub prompt: String,
+    pub limit: Option<u32>,
 }
 
 /// `POST /api/v1/query/nl` — natural language → SQL → results.
@@ -352,12 +352,12 @@ pub async fn query_nl(
 
 /// Request body for `POST /api/v1/query/similar`.
 #[derive(Debug, Deserialize)]
-struct SimilarQueryRequest {
+pub struct SimilarQueryRequest {
     /// Event ID to find similar events for.
-    event_id: Option<String>,
+    pub event_id: Option<String>,
     /// Or raw text to search for.
-    query: Option<String>,
-    limit: Option<u32>,
+    pub query: Option<String>,
+    pub limit: Option<u32>,
 }
 
 /// `POST /api/v1/query/similar` — vector similarity search.
