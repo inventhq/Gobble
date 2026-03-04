@@ -265,8 +265,8 @@ tracker/
 │   ├── aggregate-schema/              # Shared Rust crate for warm tier schema
 │   ├── tool-definitions/              # MCP tool JSON definitions
 │   └── vivgrid-tools/                 # Vivgrid AI chat integration
-├── TRACKER.md                         # Project constitution + backlog
-├── NOTES.md                           # Distributed computing lessons + patterns
+├── CONTRIBUTING.md                    # How to contribute
+├── LICENSE                            # Apache License 2.0
 └── README.md                          # This file
 ```
 
@@ -355,3 +355,13 @@ New to the platform? See the **[Onboarding Guide](docs/onboarding.md)** for step
 |---------|-------------|----------|
 | [`@inventhq/tracker-beacon`](https://www.npmjs.com/package/@inventhq/tracker-beacon) | Browser beacon — cookieless pageview & click tracking | `npm i @inventhq/tracker-beacon` |
 | [`@inventhq/tracker-sdk`](https://www.npmjs.com/package/@inventhq/tracker-sdk) | Server-side SDK — URL generation & batch events | `npm i @inventhq/tracker-sdk` |
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, architecture guidelines, and how to submit pull requests.
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).
+
+Copyright 2026 InventHQ
