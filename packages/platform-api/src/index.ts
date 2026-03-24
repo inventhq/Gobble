@@ -19,6 +19,7 @@ import events from "./routes/events.js";
 import trackingUrls from "./routes/tracking-urls.js";
 import { filterRules } from "./routes/filter-rules.js";
 import ingestTokens from "./routes/ingest-tokens.js";
+import onboarding from "./routes/onboarding.js";
 import chat, { setAppRef } from "./routes/chat.js";
 
 const app = new Hono<AppType>();
@@ -72,6 +73,7 @@ app.route("/api/events", events);
 app.route("/api/tracking-urls", trackingUrls);
 app.route("/api/filter-rules", filterRules);
 app.route("/api/ingest-tokens", ingestTokens);
+app.route("/api", onboarding);
 app.route("/api/chat", chat);
 app.route("/internal", internal);
 

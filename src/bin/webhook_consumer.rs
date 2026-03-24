@@ -72,6 +72,11 @@ struct Webhook {
     secret: String,
     #[allow(dead_code)]
     event_types: Vec<String>,
+    /// Optional param key filter — only dispatch when event.params contains this key.
+    filter_param_key: Option<String>,
+    /// Optional param value filter — only dispatch when event.params[key] == value.
+    /// If key is set but value is None, dispatches when the key exists regardless of value.
+    filter_param_value: Option<String>,
 }
 
 struct TursoClient {
@@ -155,7 +160,7 @@ impl TursoClient {
         // tenant_id in webhooks table is the tenant row ID, but the consumer
         // only has key_prefix. We need to resolve prefix → tenant ID first.
         let sql = format!(
-            "SELECT w.id, w.url, w.secret, w.event_types \
+            "SELECT w.id, w.url, w.secret, w.event_types, w.filter_param_key, w.filter_param_value \
              FROM webhooks w \
              JOIN tenants t ON w.tenant_id = t.id \
              WHERE t.key_prefix = '{}' AND w.active = 1",
@@ -177,6 +182,14 @@ impl TursoClient {
             let url = row[1].as_str().unwrap_or_default().to_string();
             let secret = row[2].as_str().unwrap_or_default().to_string();
             let event_types_raw = row[3].as_str().unwrap_or("[]");
+            let filter_param_key = row.get(4)
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string());
+            let filter_param_value = row.get(5)
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string());
 
             let event_types: Vec<String> =
                 serde_json::from_str(event_types_raw).unwrap_or_default();
@@ -190,6 +203,8 @@ impl TursoClient {
                     url,
                     secret,
                     event_types,
+                    filter_param_key,
+                    filter_param_value,
                 });
             }
         }
@@ -541,6 +556,24 @@ async fn main() {
 
                 // Dispatch to all matching webhooks (with delivery dedup check)
                 for webhook in &webhooks {
+                    // Param filter: skip if webhook has a filter that doesn't match
+                    if let Some(ref key) = webhook.filter_param_key {
+                        match event.params.get(key) {
+                            Some(val) => {
+                                // Key exists — check value if filter_param_value is set
+                                if let Some(ref expected) = webhook.filter_param_value {
+                                    if val != expected {
+                                        continue;
+                                    }
+                                }
+                            }
+                            None => {
+                                // Key not present in event params — skip this webhook
+                                continue;
+                            }
+                        }
+                    }
+
                     // Skip if this webhook+event was already successfully delivered
                     // (handles duplicate dispatch during consumer rebalance replay)
                     match turso.delivery_exists(&webhook.id, &event.event_id).await {

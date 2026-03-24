@@ -18,6 +18,7 @@ export type Env = {
   POLARS_QUERY_URL?: string;
   POLARS_LITE_URL?: string;
   VIVGRID_API_KEY?: string;
+  TRACKER_CORE_URL?: string;
 };
 
 /** Variables set by middleware and available in route handlers. */

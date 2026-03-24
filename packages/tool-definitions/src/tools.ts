@@ -162,7 +162,7 @@ const list_webhooks: ToolDefinition = {
 const register_webhook: ToolDefinition = {
   name: "register_webhook",
   description:
-    "Register a new webhook endpoint. The webhook will receive HTTP POST requests for matching events. Returns the webhook secret ONLY ONCE — save it to verify signatures.",
+    "Register a new webhook endpoint. The webhook will receive HTTP POST requests for matching events. Supports event_type filtering and optional param-level filtering (e.g. only fire when environment=production). Returns the webhook secret ONLY ONCE — save it to verify signatures.",
   parameters: {
     url: {
       type: "string",
@@ -172,18 +172,28 @@ const register_webhook: ToolDefinition = {
     event_types: {
       type: "array",
       description:
-        "Event types to subscribe to: ['click', 'postback', 'impression'] or ['*'] for all (default: ['*'])",
+        "Event types to subscribe to: ['click', 'postback', 'impression', 'config.updated'] or ['*'] for all (default: ['*'])",
       items: { type: "string" },
+    },
+    filter_param_key: {
+      type: "string",
+      description:
+        "Optional: only dispatch when the event's params contain this key (e.g. 'environment', 'source', 'campaign_id')",
+    },
+    filter_param_value: {
+      type: "string",
+      description:
+        "Optional: only dispatch when the param value matches exactly (e.g. 'production'). Requires filter_param_key.",
     },
   },
   method: "POST",
   path: "/api/webhooks",
-  bodyArgs: ["url", "event_types"],
+  bodyArgs: ["url", "event_types", "filter_param_key", "filter_param_value"],
 };
 
 const update_webhook: ToolDefinition = {
   name: "update_webhook",
-  description: "Update a webhook's URL, event_types, or active status.",
+  description: "Update a webhook's URL, event_types, active status, or param filter.",
   parameters: {
     webhook_id: {
       type: "string",
@@ -200,11 +210,21 @@ const update_webhook: ToolDefinition = {
       type: "boolean",
       description: "Enable (true) or disable (false) the webhook",
     },
+    filter_param_key: {
+      type: "string",
+      description:
+        "Set or update param key filter. Set to empty string to remove the filter.",
+    },
+    filter_param_value: {
+      type: "string",
+      description:
+        "Set or update param value filter. Set to empty string to remove.",
+    },
   },
   method: "PATCH",
   path: "/api/webhooks/:webhook_id",
   pathArgs: ["webhook_id"],
-  bodyArgs: ["url", "event_types", "active"],
+  bodyArgs: ["url", "event_types", "active", "filter_param_key", "filter_param_value"],
 };
 
 const delete_webhook: ToolDefinition = {
@@ -771,6 +791,151 @@ const delete_filter_rule: ToolDefinition = {
   pathArgs: ["id"],
 };
 
+// ====================== INGEST TOKEN TOOLS ================================
+
+const create_ingest_token: ToolDefinition = {
+  name: "create_ingest_token",
+  description:
+    "Create a new ingest token for POST /ingest authentication. Returns the token ONLY ONCE — save it immediately. Format: pt_{key_prefix}_{random}. Admin must provide tenant_id; tenant-scoped keys use their own tenant.",
+  parameters: {
+    tenant_id: {
+      type: "string",
+      description:
+        "Tenant ID (required for admin key, auto-resolved for tenant keys)",
+    },
+    name: {
+      type: "string",
+      description:
+        "Descriptive name for the token (e.g. 'Stripe Plugin', 'RAG Pipeline')",
+    },
+    plugin_id: {
+      type: "string",
+      description: "Optional plugin identifier this token is associated with",
+    },
+    expires_in_days: {
+      type: "number",
+      description:
+        "Optional token expiry in days (e.g. 90). Omit for non-expiring tokens.",
+    },
+  },
+  method: "POST",
+  path: "/api/ingest-tokens",
+  bodyArgs: ["tenant_id", "name", "plugin_id", "expires_in_days"],
+};
+
+const list_ingest_tokens: ToolDefinition = {
+  name: "list_ingest_tokens",
+  description:
+    "List ingest tokens for the authenticated tenant. Shows token ID, name, key_prefix, plugin_id, expiry, and revocation status. Never shows the actual token value.",
+  parameters: {
+    key_prefix: {
+      type: "string",
+      description: "Admin only: filter by tenant key_prefix",
+    },
+  },
+  method: "GET",
+  path: "/api/ingest-tokens",
+  queryArgs: ["key_prefix"],
+};
+
+const revoke_ingest_token: ToolDefinition = {
+  name: "revoke_ingest_token",
+  description:
+    "Permanently revoke an ingest token. The token will immediately stop working for POST /ingest. This cannot be undone.",
+  parameters: {
+    token_id: {
+      type: "string",
+      description: "The ingest token ID to revoke",
+      required: true,
+    },
+  },
+  method: "DELETE",
+  path: "/api/ingest-tokens/:token_id",
+  pathArgs: ["token_id"],
+};
+
+// =================== ONBOARDING HELPER TOOLS ==============================
+
+const generate_tracking_link: ToolDefinition = {
+  name: "generate_tracking_link",
+  description:
+    "Generate a ready-to-use signed click tracking URL. The server loads the tenant's HMAC secret and signs the URL — no secret handling needed by the caller. Returns the complete tracking URL that redirects to the destination.",
+  parameters: {
+    destination: {
+      type: "string",
+      description: "The URL the user will be redirected to (e.g. 'https://offer.example.com/landing')",
+      required: true,
+    },
+    params: {
+      type: "string",
+      description:
+        "Optional JSON string of additional tracking params (e.g. '{\"sub1\":\"google\",\"campaign_id\":\"123\"}').",
+    },
+    tenant_id: {
+      type: "string",
+      description:
+        "Tenant ID (required for admin key, auto-resolved for tenant keys)",
+    },
+  },
+  method: "POST",
+  path: "/api/tracking-urls/generate-link",
+  bodyArgs: ["destination", "params", "tenant_id"],
+};
+
+const ingest_event: ToolDefinition = {
+  name: "ingest_event",
+  description:
+    "Send a test event or a real event through the platform pipeline. Useful for verifying onboarding setup end-to-end. The event flows through Iggy, event-filter, and into all downstream consumers (RisingWave, R2 archiver, webhooks). Requires a valid ingest token for the tenant.",
+  parameters: {
+    token: {
+      type: "string",
+      description:
+        "Ingest token (pt_{key_prefix}_{secret}) for authentication",
+      required: true,
+    },
+    event_type: {
+      type: "string",
+      description:
+        "Event type (e.g. 'test', 'message.sent', 'config.updated')",
+      required: true,
+    },
+    params: {
+      type: "string",
+      description:
+        "Optional JSON string of flat key-value params (e.g. '{\"source\":\"onboarding\",\"test\":\"true\"}').",
+    },
+    raw_payload: {
+      type: "string",
+      description:
+        "Optional JSON string of the full nested payload from the external source.",
+    },
+  },
+  method: "POST",
+  path: "/api/ingest-event",
+  bodyArgs: ["token", "event_type", "params", "raw_payload"],
+};
+
+const get_beacon_snippet: ToolDefinition = {
+  name: "get_beacon_snippet",
+  description:
+    "Get the ready-to-paste browser beacon script tag for a tenant. Drop this into any HTML page to automatically track pageviews and outbound clicks. Zero cookies, zero fingerprinting.",
+  parameters: {
+    key_prefix: {
+      type: "string",
+      description: "The tenant's key_prefix (e.g. '6vct')",
+      required: true,
+    },
+    host: {
+      type: "string",
+      description:
+        "Optional tracker-core host URL (default: 'https://track.juicyapi.com')",
+    },
+  },
+  method: "GET",
+  path: "/api/beacon-snippet",
+  queryArgs: ["key_prefix", "host"],
+};
+
 // ======================== AI QUERY TOOLS ==================================
 
 const nl_query: ToolDefinition = {
@@ -905,6 +1070,14 @@ export const ALL_TOOLS: ToolDefinition[] = [
   create_filter_rule,
   update_filter_rule,
   delete_filter_rule,
+  // Ingest Tokens
+  create_ingest_token,
+  list_ingest_tokens,
+  revoke_ingest_token,
+  // Onboarding Helpers
+  generate_tracking_link,
+  ingest_event,
+  get_beacon_snippet,
   // AI Query
   nl_query,
   similar_events,

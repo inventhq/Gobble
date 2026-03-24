@@ -25,14 +25,20 @@ CREATE TABLE IF NOT EXISTS api_keys (
 );
 
 CREATE TABLE IF NOT EXISTS webhooks (
-  id            TEXT PRIMARY KEY,
-  tenant_id     TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  url           TEXT NOT NULL,
-  event_types   TEXT NOT NULL DEFAULT '["*"]',
-  secret        TEXT NOT NULL,
-  active        INTEGER NOT NULL DEFAULT 1,
-  created_at    INTEGER NOT NULL DEFAULT (unixepoch())
+  id                TEXT PRIMARY KEY,
+  tenant_id         TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  url               TEXT NOT NULL,
+  event_types       TEXT NOT NULL DEFAULT '["*"]',
+  secret            TEXT NOT NULL,
+  active            INTEGER NOT NULL DEFAULT 1,
+  filter_param_key  TEXT,  -- optional: only dispatch when event.params[key] exists
+  filter_param_value TEXT, -- optional: only dispatch when event.params[key] == value
+  created_at        INTEGER NOT NULL DEFAULT (unixepoch())
 );
+
+-- Migration: add filter columns to existing webhooks table
+ALTER TABLE webhooks ADD COLUMN filter_param_key TEXT;
+ALTER TABLE webhooks ADD COLUMN filter_param_value TEXT;
 
 CREATE TABLE IF NOT EXISTS webhook_deliveries (
   id            TEXT PRIMARY KEY,

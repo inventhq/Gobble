@@ -19,6 +19,8 @@ webhooks.post("/", async (c) => {
   const body = await c.req.json<{
     url: string;
     event_types?: string[];
+    filter_param_key?: string;
+    filter_param_value?: string;
   }>();
 
   if (!body.url || typeof body.url !== "string") {
@@ -35,17 +37,21 @@ webhooks.post("/", async (c) => {
   const id = generateId();
   const eventTypes = JSON.stringify(body.event_types || ["*"]);
   const secret = generateWebhookSecret();
+  const filterParamKey = body.filter_param_key || null;
+  const filterParamValue = body.filter_param_value || null;
 
   await db.execute({
-    sql: `INSERT INTO webhooks (id, tenant_id, url, event_types, secret)
-          VALUES (?, ?, ?, ?, ?)`,
-    args: [id, tenantId, body.url, eventTypes, secret],
+    sql: `INSERT INTO webhooks (id, tenant_id, url, event_types, secret, filter_param_key, filter_param_value)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, tenantId, body.url, eventTypes, secret, filterParamKey, filterParamValue],
   });
 
   return c.json({
     id,
     url: body.url,
     event_types: body.event_types || ["*"],
+    filter_param_key: filterParamKey,
+    filter_param_value: filterParamValue,
     secret,
     active: true,
     message: "Save the webhook secret — it will not be shown again.",
@@ -58,7 +64,7 @@ webhooks.get("/", async (c) => {
   const db = c.get("db");
 
   const result = await db.execute({
-    sql: "SELECT id, url, event_types, active, created_at FROM webhooks WHERE tenant_id = ? ORDER BY created_at DESC",
+    sql: "SELECT id, url, event_types, active, filter_param_key, filter_param_value, created_at FROM webhooks WHERE tenant_id = ? ORDER BY created_at DESC",
     args: [tenantId],
   });
 
@@ -66,6 +72,8 @@ webhooks.get("/", async (c) => {
     webhooks: result.rows.map((row) => ({
       ...row,
       event_types: JSON.parse(row.event_types as string),
+      filter_param_key: row.filter_param_key || null,
+      filter_param_value: row.filter_param_value || null,
     })),
   });
 });
@@ -79,10 +87,12 @@ webhooks.patch("/:id", async (c) => {
     url?: string;
     event_types?: string[];
     active?: boolean;
+    filter_param_key?: string | null;
+    filter_param_value?: string | null;
   }>();
 
   const updates: string[] = [];
-  const args: (string | number)[] = [];
+  const args: (string | number | null)[] = [];
 
   if (body.url) {
     try {
@@ -100,6 +110,14 @@ webhooks.patch("/:id", async (c) => {
   if (body.active !== undefined) {
     updates.push("active = ?");
     args.push(body.active ? 1 : 0);
+  }
+  if (body.filter_param_key !== undefined) {
+    updates.push("filter_param_key = ?");
+    args.push(body.filter_param_key);
+  }
+  if (body.filter_param_value !== undefined) {
+    updates.push("filter_param_value = ?");
+    args.push(body.filter_param_value);
   }
 
   if (updates.length === 0) {
