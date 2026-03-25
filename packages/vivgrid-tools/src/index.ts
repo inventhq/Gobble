@@ -12,3 +12,4 @@ export { chatRoute } from "./route.js";
 export { setAppRef } from "./route.js";
 export { TOOLS, buildToolRequest } from "./tools.js";
 export { SYSTEM_PROMPT } from "./prompt.js";
+export { ONBOARDING_PROMPT } from "./onboarding-prompt.js";

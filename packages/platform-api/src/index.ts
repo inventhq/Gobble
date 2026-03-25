@@ -20,6 +20,7 @@ import trackingUrls from "./routes/tracking-urls.js";
 import { filterRules } from "./routes/filter-rules.js";
 import ingestTokens from "./routes/ingest-tokens.js";
 import onboarding from "./routes/onboarding.js";
+import onboardingChat, { setOnboardingAppRef } from "./routes/onboarding-chat.js";
 import chat, { setAppRef } from "./routes/chat.js";
 
 const app = new Hono<AppType>();
@@ -61,6 +62,9 @@ app.get("/health", (c) => {
   return c.json({ status: "ok", service: "platform-api" });
 });
 
+// Public onboarding chat (no auth — new customers have no API key yet)
+app.route("/onboard", onboardingChat);
+
 // All /api/* and /internal/* routes require auth
 app.use("/api/*", authMiddleware());
 app.use("/internal/*", authMiddleware());
@@ -77,8 +81,9 @@ app.route("/api", onboarding);
 app.route("/api/chat", chat);
 app.route("/internal", internal);
 
-// Give the chat route access to app.request() for internal tool execution
+// Give chat routes access to app.request() for internal tool execution
 setAppRef(app);
+setOnboardingAppRef(app);
 
 // 404 fallback
 app.notFound((c) => {
