@@ -1,0 +1,53 @@
+# Standalone build for webhook-consumer.
+# Only copies tracker-shared + webhook-consumer crates — no root workspace deps.
+#
+# Usage:
+#   docker build -f docker/Dockerfile.webhook-consumer -t webhook-consumer .
+#
+# On-cluster (Kaniko):
+#   --dockerfile=docker/Dockerfile.webhook-consumer --context=...
+
+# ── Builder ──────────────────────────────────────────────────────────────────
+FROM rust:latest AS builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libssl-dev protobuf-compiler cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy crate manifests first for dependency caching
+COPY crates/tracker-shared/Cargo.toml crates/tracker-shared/Cargo.toml
+COPY crates/webhook-consumer/Cargo.toml crates/webhook-consumer/Cargo.toml
+
+# Dummy sources for dep caching
+RUN mkdir -p crates/tracker-shared/src crates/webhook-consumer/src && \
+    echo "pub mod event; pub mod health; mod resolve; pub use resolve::resolve_server_addr;" > crates/tracker-shared/src/lib.rs && \
+    echo "pub struct TrackingEvent;" > crates/tracker-shared/src/event.rs && \
+    echo "" > crates/tracker-shared/src/health.rs && \
+    echo "" > crates/tracker-shared/src/resolve.rs && \
+    echo "fn main() {}" > crates/webhook-consumer/src/main.rs
+
+# Build deps only (cached unless Cargo.toml changes)
+RUN cargo build --release --manifest-path crates/webhook-consumer/Cargo.toml 2>/dev/null || true
+
+# Copy real source and rebuild
+COPY crates/tracker-shared/src/ crates/tracker-shared/src/
+COPY crates/webhook-consumer/src/ crates/webhook-consumer/src/
+RUN touch crates/tracker-shared/src/lib.rs crates/webhook-consumer/src/main.rs && \
+    cargo build --release --manifest-path crates/webhook-consumer/Cargo.toml
+
+# ── Runtime ──────────────────────────────────────────────────────────────────
+FROM debian:trixie-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /build/crates/webhook-consumer/target/release/webhook-consumer /usr/local/bin/app
+
+EXPOSE 3030
+
+ENV RUST_LOG=info
+
+ENTRYPOINT ["/usr/local/bin/app"]

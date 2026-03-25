@@ -38,6 +38,7 @@ object_store = { version = "0.12", features = ["aws"] }
 url = "2"
 chrono = "0.4"
 aggregate-schema = { path = "packages/aggregate-schema" }
+tracker-shared = { path = "crates/tracker-shared" }
 
 [[bin]]
 name = "tracker-core"
@@ -46,10 +47,6 @@ path = "src/main.rs"
 [[bin]]
 name = "stats-consumer"
 path = "src/bin/stats_consumer.rs"
-
-[[bin]]
-name = "webhook-consumer"
-path = "src/bin/webhook_consumer.rs"
 
 [[bin]]
 name = "sse-gateway"

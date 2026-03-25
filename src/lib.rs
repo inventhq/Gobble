@@ -10,11 +10,14 @@
 pub mod api;
 pub mod config;
 pub mod crypto;
-pub mod event;
-pub mod health;
 pub mod ingest_token_cache;
 pub mod producer;
 pub mod rate_limiter;
 pub mod routes;
 pub mod tenant_cache;
 pub mod tracking_url_cache;
+
+// Re-exported from tracker-shared so other binaries can still use
+// `tracker_core::event::TrackingEvent` and `tracker_core::health::*`.
+pub use tracker_shared::event;
+pub use tracker_shared::health;

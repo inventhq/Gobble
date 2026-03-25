@@ -43,13 +43,12 @@ jobs:
               - 'src/lib.rs'
               - 'src/config.rs'
               - 'src/crypto.rs'
-              - 'src/event.rs'
-              - 'src/health.rs'
               - 'src/producer.rs'
               - 'src/ingest_token_cache.rs'
               - 'src/rate_limiter.rs'
               - 'src/tenant_cache.rs'
               - 'src/tracking_url_cache.rs'
+              - 'crates/tracker-shared/**'
               - 'docker/Dockerfile.core'
               - 'packages/aggregate-schema/**'
             tracker-core:
@@ -58,7 +57,9 @@ jobs:
             sse-gateway:
               - 'src/bin/sse_gateway.rs'
             webhook-consumer:
-              - 'src/bin/webhook_consumer.rs'
+              - 'crates/webhook-consumer/**'
+              - 'crates/tracker-shared/**'
+              - 'docker/Dockerfile.webhook-consumer'
             risingwave-consumer:
               - 'src/bin/risingwave_consumer.rs'
             r2-archiver:
@@ -144,8 +145,7 @@ jobs:
       - uses: docker/build-push-action@v5
         with:
           context: .
-          file: docker/Dockerfile.core
-          build-args: BINARY=webhook-consumer
+          file: docker/Dockerfile.webhook-consumer
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/webhook-consumer:latest

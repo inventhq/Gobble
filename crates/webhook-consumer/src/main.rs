@@ -21,8 +21,8 @@ use sha2::Sha256;
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
-use tracker_core::event::TrackingEvent;
-use tracker_core::health::{HealthCounters, spawn_health_server};
+use tracker_shared::event::TrackingEvent;
+use tracker_shared::health::{HealthCounters, spawn_health_server};
 
 /// Maximum delivery attempts per webhook per event.
 const MAX_ATTEMPTS: u32 = 3;
@@ -417,7 +417,7 @@ async fn main() {
     info!("Turso: {}", turso_url);
 
     // --- Connect to Iggy ---
-    let resolved_iggy = tracker_core::producer::resolve_server_addr(&iggy_url).await;
+    let resolved_iggy = tracker_shared::resolve_server_addr(&iggy_url).await;
     let client = IggyClientBuilder::new()
         .with_tcp()
         .with_server_address(resolved_iggy.clone())
