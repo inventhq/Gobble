@@ -3,11 +3,12 @@
 #
 # Usage:
 #   docker build -f docker/Dockerfile.core --build-arg BINARY=tracker-core -t tracker-core .
-#   docker build -f docker/Dockerfile.core --build-arg BINARY=webhook-consumer -t webhook-consumer .
 #   docker build -f docker/Dockerfile.core --build-arg BINARY=sse-gateway -t sse-gateway .
 #   docker build -f docker/Dockerfile.core --build-arg BINARY=risingwave-consumer -t risingwave-consumer .
 #   docker build -f docker/Dockerfile.core --build-arg BINARY=r2-archiver -t r2-archiver .
 #   docker build -f docker/Dockerfile.core --build-arg BINARY=event-filter -t event-filter .
+#
+# Note: webhook-consumer uses its own Dockerfile (docker/Dockerfile.webhook-consumer).
 
 ARG BINARY=tracker-core
 
@@ -26,13 +27,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy manifests first for dependency caching
 COPY Cargo.toml Cargo.lock ./
 COPY packages/aggregate-schema/ packages/aggregate-schema/
+COPY crates/tracker-shared/ crates/tracker-shared/
 
 # Create dummy src files so cargo can resolve deps and cache them
 RUN mkdir -p src/bin && \
     echo "fn main() {}" > src/main.rs && \
     echo "pub fn dummy() {}" > src/lib.rs && \
     echo "fn main() {}" > src/bin/stats_consumer.rs && \
-    echo "fn main() {}" > src/bin/webhook_consumer.rs && \
     echo "fn main() {}" > src/bin/sse_gateway.rs && \
     echo "fn main() {}" > src/bin/risingwave_consumer.rs && \
     echo "fn main() {}" > src/bin/r2_archiver.rs && \
